@@ -95,40 +95,60 @@ def download_file(url, filename):
         st.error(f"Error downloading file: {e}")
         return None
 
-# Add this CSS to your Streamlit app
-st.markdown("""
-    <style>
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 9999;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .modal-content {
-            background: white;
-            padding: 2rem;
-            border-radius: 10px;
-            max-width: 80%;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-        
-        .modal-close {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-    </style>
-""", unsafe_allow_html=True)
+def display_result_details(result):
+    """Displays the details of a selected result, including an audio player if applicable."""
+    st.subheader(result['title'])
+    if 'creator' in result:
+        st.write(f"**Creator:** {result['creator']}")
+    st.write(f"**Identifier:** {result['identifier']}")
+    item_url = f"https://archive.org/details/{result['identifier']}"
+    st.markdown(f"[View on Archive.org]({item_url})")
+    if 'image' in result:
+        image_url = result['image']
+        st.image(image_url, caption=f"Image for {result['title']}", use_container_width=True)  # Changed here
+    else:
+        st.write("No image available.")
+
+    # Retrieve files for the selected item
+    with st.spinner(f"Retrieving files for '{result['title']}'..."):
+        files = get_item_files(result['identifier'])
+        if files:
+            audio_files = [file for file in files if file['name'].lower().endswith(('.mp3', '.wav', '.flac', '.ogg'))]
+
+            if audio_files:
+                st.subheader("Audio Player")
+                audio_urls = [f"https://archive.org/download/{result['identifier']}/{file['name']}" for file in audio_files]
+
+                # Create a playlist using the audio URLs
+                playlist_html = f"""
+                    <audio controls autoplay>
+                        {''.join([f'<source src="{url}" type="audio/{url.split(".")[-1]}">' for url in audio_urls])}
+                        Your browser does not support the audio element.
+                    </audio>
+                """
+                st.components.v1.html(playlist_html, height=100)  # Adjust height as needed
+
+            st.subheader("Files:")
+            file_names = [file['name'] for file in files]
+            selected_file = st.selectbox("Select a file to download:", file_names,
+                                          key=f"file_select_{result['identifier']}")  # Unique key!
+            if selected_file:
+                selected_file_data = next((file for file in files if file['name'] == selected_file), None)
+                download_url = f"https://archive.org/download/{result['identifier']}/{selected_file_data['name']}"
+                # Immediately trigger download
+                with st.spinner(f"Downloading '{selected_file}'..."):
+                    file_bytes = download_file(download_url, selected_file)
+                    if file_bytes:
+                        st.download_button(
+                            label=f"Download '{selected_file}'",
+                            data=file_bytes,
+                            file_name=selected_file,
+                            mime="application/octet-stream",  # Generic binary file type
+                            key=f"download_button_{result['identifier']}_{selected_file}",
+                            # Use a unique key
+                        )
+        else:
+            st.warning("No files found for this item.")
 
 def get_thumbnail_url(identifier):
     """
@@ -139,86 +159,6 @@ def get_thumbnail_url(identifier):
     except Exception as e:
         print(f"Error getting thumbnail URL: {e}")
         return None
-
-# Modify the display_result_details function to return HTML
-def get_result_details_html(result):
-    """Returns HTML content for the modal"""
-    html = f"""
-    <div class="modal-content">
-        <span class="modal-close" onclick="window.parent.document.querySelector('.modal-overlay').style.display = 'none'">&times;</span>
-        <h3>{result['title']}</h3>
-    """
-    
-    if 'creator' in result:
-        html += f"<p><strong>Creator:</strong> {result['creator']}</p>"
-    
-    html += f"<p><strong>Identifier:</strong> {result['identifier']}</p>"
-    
-    item_url = f"https://archive.org/details/{result['identifier']}"
-    html += f'<p><a href="{item_url}" target="_blank">View on Archive.org</a></p>'
-    
-    if 'image' in result:
-        html += f'<img src="{result["image"]}" style="max-width: 100%; height: auto;">'
-    
-    # Add files and download section
-    files = get_item_files(result['identifier'])
-    if files:
-        # Audio player
-        audio_files = [file for file in files if file['name'].lower().endswith(('.mp3', '.wav', '.flac', '.ogg'))]
-        if audio_files:
-            html += "<h4>Audio Player</h4>"
-            html += "<audio controls>"
-            for file in audio_files:
-                url = f"https://archive.org/download/{result['identifier']}/{file['name']}"
-                html += f'<source src="{url}" type="audio/{file["name"].split(".")[-1]}">'
-            html += "Your browser does not support the audio element.</audio>"
-        
-        # File download section
-        html += "<h4>Files</h4>"
-        html += "<div style='max-height: 200px; overflow-y: auto;'>"
-        for file in files:
-            url = f"https://archive.org/download/{result['identifier']}/{file['name']}"
-            html += f'<p><a href="{url}" download>{file["name"]}</a></p>'
-        html += "</div>"
-    
-    html += "</div>"
-    return html
-
-# Modify the results display section
-if st.session_state.results:
-    num_columns = 5
-    cols = st.columns(num_columns)
-    
-    for i, result in enumerate(st.session_state.results):
-        with cols[i % num_columns]:
-            thumbnail_url = get_thumbnail_url(result['identifier'])
-            if thumbnail_url:
-                st.image(thumbnail_url, use_column_width=True)
-            st.write(result['title'][:50] + "..." if len(result['title']) > 50 else result['title'])
-            
-            if st.button("Show Details", key=f"details_{result['identifier']}"):
-                st.session_state.selected_result = result
-                st.session_state.show_modal = True
-
-# Show modal if triggered
-if st.session_state.get('show_modal'):
-    result = st.session_state.selected_result
-    modal_html = f"""
-    <div class="modal-overlay" onclick="event.stopPropagation(); this.style.display = 'none';">
-        {get_result_details_html(result)}
-    </div>
-    <script>
-        document.querySelector('.modal-overlay').addEventListener('click', function(e) {{
-            if(e.target === this) {{
-                this.style.display = 'none';
-            }}
-        }});
-    </script>
-    """
-    st.components.v1.html(modal_html, height=600)
-    
-    # Reset modal state after rendering
-    st.session_state.show_modal = False
 
 def get_zip_download_url(identifier):
     """
