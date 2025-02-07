@@ -158,7 +158,7 @@ def download_file(url, filename):
 
 
 def display_result_details(result):
-    """Displays the details of a selected result, including an audio player if applicable."""
+    """Displays the details of a selected result, including an audio player with queue and file selection."""
     st.subheader(result['title'])
     if 'creator' in result:
         st.write(f"**Creator:** {result['creator']}")
@@ -186,13 +186,30 @@ def display_result_details(result):
                 if audio_files:
                     st.subheader("Audio Player")
                     audio_urls = [f"https://archive.org/download/{result['identifier']}/{file['name']}" for file in audio_files]
+                    audio_names = [file['name'] for file in audio_files]
+
+                    # Create a playlist using session state to manage selected track
+                    if 'selected_track_index' not in st.session_state:
+                        st.session_state.selected_track_index = 0
+
+                    def play_track(index):
+                        st.session_state.selected_track_index = index
+
+                    # Display track list with buttons to play each track
+                    for i, name in enumerate(audio_names):
+                        if st.button(f"Play: {name}", key=f"play_button_{result['identifier']}_{i}"):
+                            play_track(i)
+
+                    # Generate the audio player HTML with the selected track
+                    selected_audio_url = audio_urls[st.session_state.selected_track_index]
                     playlist_html = f"""
                         <audio controls autoplay>
-                            {''.join([f'<source src="{url}" type="audio/{url.split(".")[-1]}">' for url in audio_urls])}
+                            <source src="{selected_audio_url}" type="audio/{selected_audio_url.split(".")[-1]}">
                             Your browser does not support the audio element.
                         </audio>
                     """
                     st.components.v1.html(playlist_html, height=100)
+
                 st.subheader("Files:")
                 file_names = [file['name'] for file in files]
                 selected_file = st.selectbox("Select a file to download:", file_names,
