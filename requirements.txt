@@ -2,3 +2,4 @@ streamlit==1.29.0
 internetarchive
 requests==2.31.0
 Pillow==10.1.0
+discogs_client
