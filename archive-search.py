@@ -13,12 +13,24 @@ import random
 # Configure MusicBrainz
 musicbrainzngs.set_useragent("ArchiveOrgSearch", "1.0", "your_email@example.com")  # Replace with your email
 
-def search_musicbrainz_album(album_title, artist_name, retry_count=0, max_retries=3):
-    """Searches MusicBrainz for albums with retry logic."""
+def search_musicbrainz_album(album_title=None, artist_name=None, retry_count=0, max_retries=3):
+    """Searches MusicBrainz for albums with retry logic, handling missing artist/album."""
     try:
+        query = ""
+        if artist_name:
+            query += f'artist:"{artist_name}"'
+        if album_title:
+            if query:
+                query += " AND "
+            query += f'release:"{album_title}"'
+
+        if not query:
+            st.warning("Please enter either an album title or artist name to search MusicBrainz.")
+            return [], None
+
         results = musicbrainzngs.search_release_groups(
-            query=f'artist:"{artist_name}" AND release:"{album_title}"',
-            limit=10  # Limit the number of results
+            query=query,
+            limit=20  # Limit the number of results
         )
 
         if 'release-group-list' in results:
@@ -223,8 +235,8 @@ st.title("Archive.org Search")
 
 # Album Search Section
 st.subheader("Album Search")
-album_title = st.text_input("Enter Album Title:", key="album_title_input")
-artist_name = st.text_input("Enter Artist Name:", key="artist_name_input")
+album_title = st.text_input("Enter Album Title:", key="album_title_input", value="")  # Initialize with empty string
+artist_name = st.text_input("Enter Artist Name:", key="artist_name_input", value="")  # Initialize with empty string
 
 album_search_button = st.button("Search Album (MusicBrainz)", key="album_search_button")
 
@@ -235,7 +247,7 @@ if 'selected_album' not in st.session_state:
     st.session_state.selected_album = None
 
 musicbrainz_results = []
-if album_search_button and album_title and artist_name:
+if album_search_button:
     with st.spinner(f"Searching MusicBrainz for '{album_title}' by '{artist_name}'..."):
         musicbrainz_results, musicbrainz_error = search_musicbrainz_album(album_title, artist_name)
         if musicbrainz_error:
@@ -247,7 +259,7 @@ if st.session_state.get("musicbrainz_results"):
     st.subheader("MusicBrainz Results")
     album_options = [f"{result['artist']} - {result['title']} ({result['year']})" for result in st.session_state.musicbrainz_results if result['year']]
     default_index = 0 if album_options else None  # Select first if available, else None
-    selected_album_display = st.selectbox("Select an album:", album_options, key="musicbrainz_album_select", index=default_index)
+    selected_album_display = st.selectbox("Select an album:", album_options, key="musicbrainz_album_select", index=default_index, on_change=None)
 
 
     # Find the selected album
