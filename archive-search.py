@@ -270,4 +270,4 @@ if st.session_state.results:
 
 else:
     if st.session_state.get("selected_result_identifier"):
-        st.session_state.selected_result_identifier = None # Clear the selection if no results.
+        st.session_state.selected_result_identifier = None # Clear the selection if no results..
