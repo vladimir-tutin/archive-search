@@ -793,6 +793,16 @@ if st.session_state.results:
                     image = Image.open(io.BytesIO(response.content))
                     zip_download_url = get_zip_download_url(result['identifier'])
                     if zip_download_url:
-                        st.markdown(
-                            f"""
-                            <div style="position: relative;">
+    st.markdown(
+        f"""
+        <div style="position: relative;">
+            <div style="height:200px; overflow: hidden;">
+                <img src="{thumbnail_url}" style="width: 100%; object-fit: contain;">
+            </div>
+            <div style="position: absolute; bottom: 5px; right: 5px;">
+                <a href="{zip_download_url}" download="{result['identifier']}.zip" style="background-color: #4CAF50; border: none; color: white; padding: 5px 10px; text-align: center; text-decoration: none; display: inline-block; font-size: 10px; cursor: pointer; border-radius: 5px;">Download Zip</a>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
