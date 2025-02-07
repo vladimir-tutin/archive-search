@@ -107,9 +107,15 @@ def display_result_details(result):
     # Thumbnail URL
     thumbnail_url = get_thumbnail_url(result['identifier'])
 
-    col1, col2 = st.columns([1, 2], gap="medium")  # Adjust the ratio as needed.  Added gap.
+    col1, col2 = st.columns([1, 2])  # Adjust the ratio as needed
 
     with col1:
+        st.markdown(
+            f"""
+            <div style="padding-right: 15px;">  <!-- Add right padding -->
+            """,
+            unsafe_allow_html=True
+        )
         if thumbnail_url:
             st.image(thumbnail_url, caption=f"Image for {result['title']}", width=300)  # Set max width
         else:
