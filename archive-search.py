@@ -114,11 +114,9 @@ def display_result_details(result):
         files = get_item_files(result['identifier'])
         if files:
             audio_files = [file for file in files if file['name'].lower().endswith(('.mp3', '.wav', '.flac', '.ogg'))]
-
             if audio_files:
                 st.subheader("Audio Player")
                 audio_urls = [f"https://archive.org/download/{result['identifier']}/{file['name']}" for file in audio_files]
-
                 # Create a playlist using the audio URLs
                 playlist_html = f"""
                     <audio controls autoplay>
@@ -213,7 +211,6 @@ if search_term or search_button_pressed:
                 # Apply file type filtering
                 filtered_results = filter_results_by_file_types(results, file_types_filter)
                 st.session_state.results = filtered_results
-
                 if filtered_results:
                     st.success(f"Found {len(filtered_results)} results:")
                 else:
@@ -225,6 +222,19 @@ if search_term or search_button_pressed:
 else:
     if 'results' not in st.session_state:
         st.session_state.results = None
+
+
+# Display the popup panel if a result is selected (BEFORE the grid)
+if st.session_state.get("selected_result_identifier"):
+    selected_result = next((result for result in st.session_state.results if
+                            result['identifier'] == st.session_state.selected_result_identifier), None)
+    if selected_result:
+        with st.container():  # Use a container to group the details
+            display_result_details(selected_result)
+    else:
+        st.error("Selected result not found.")
+        st.session_state.selected_result_identifier = None  # Clear the selection
+
 
 # Display results in a grid
 if st.session_state.results:
@@ -245,9 +255,8 @@ if st.session_state.results:
                     response = requests.get(thumbnail_url)
                     response.raise_for_status()
                     image = Image.open(io.BytesIO(response.content))
-
                     zip_download_url = get_zip_download_url(result['identifier'])
-                    # Create a download button URL
+
                     # Use HTML/CSS for overlapping button
                     if zip_download_url:
                         st.markdown(
@@ -265,27 +274,20 @@ if st.session_state.results:
                         )
                     else:
                         st.write("Download not available.")
+
                     st.caption(result['title'])  # Display title below the image
+
                 except:
                     st.write(result['title'])
             else:
                 st.write(result['title'])
 
-            # Add a button to trigger the popup panel
+            # Add a button to trigger the details.  No longer using expander.
             button_key = f"details_{i}"
             if st.button(f"Show Details", key=button_key):
                 st.session_state.selected_result_identifier = result['identifier']  # Store the identifier
-                st.session_state.expander_key = f"expander_{result['identifier']}"  # Store expander key
+                # No need to store expander key anymore.
 
-    # Display the popup panel if a result is selected
+else:
     if st.session_state.get("selected_result_identifier"):
-        selected_result = next((result for result in st.session_state.results if
-                                result['identifier'] == st.session_state.selected_result_identifier), None)
-
-        if selected_result:
-            expander_key = st.session_state.get("expander_key", "default_expander")
-            with st.expander("Result Details", expanded=True):
-                display_result_details(selected_result)
-        else:
-            st.error("Selected result not found.")
-            st.session_state.selected_result_identifier = None  # Clear the selection
+        st.session_state.selected_result_identifier = None # Clear the selection if no results.
