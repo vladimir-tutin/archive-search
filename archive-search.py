@@ -251,16 +251,16 @@ if st.session_state.results:
             # Display image if available, otherwise display title
             thumbnail_url = get_thumbnail_url(result['identifier'])
 
-            # Use the thumbnail URL directly in the image display
             if thumbnail_url:
                 try:
+                    # Try displaying the image
                     st.image(thumbnail_url, caption=result['title'], use_column_width=True)
                 except Exception as e:
-                    st.error(f"Error displaying thumbnail: {e}")
-                    st.write(result['title']) # Fallback to just title
-
+                    # If displaying the image fails, print the error and display "No image available"
+                    st.write(f"Error displaying image: {e}")
+                    st.write("No image available.")  # Display a message
             else:
-                st.write(result['title'])
+                st.write("No image available.")  # Display a message if no URL
 
             # Add a button to trigger the details.  No longer using expander.
             button_key = f"details_{i}"
@@ -270,4 +270,4 @@ if st.session_state.results:
 
 else:
     if st.session_state.get("selected_result_identifier"):
-        st.session_state.selected_result_identifier = None # Clear the selection if no results..
+        st.session_state.selected_result_identifier = None # Clear the selection if no results.
