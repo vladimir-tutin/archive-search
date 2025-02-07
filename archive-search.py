@@ -55,7 +55,7 @@ def search_archive(search_term, media_type, start_year=None, start_month=None, s
     Searches archive.org for audiobooks or ebooks, with optional date range filtering using year/month/day.
     Args:
         search_term (str): The term to search for.
-        media_type (str): The media type to search for.
+        media_type (str): The media type for the search.
         start_year (int, optional): The start year for the search. Defaults to None.
         start_month (int, optional): The start month for the search. Defaults to None.
         start_day (int, optional): The start day for the search. Defaults to None.
@@ -245,13 +245,17 @@ if musicbrainz_results:
     # Find the selected album
     selected_album = next((result for result in musicbrainz_results
                            if f"{result['artist']} - {result['title']} ({result['year']})" == selected_album_display), None)
+    if selected_album:
+        st.session_state.selected_album = selected_album  # Store selected album in session state
+else:
+    st.session_state.selected_album = None  # Clear stored album if no results
 
 # Main Search Section
 st.subheader("Archive.org Search")
 
 # Search Term Input (Prefilled)
-if selected_album:
-    search_term = f"{selected_album['artist']} {selected_album['title']}"
+if st.session_state.get("selected_album"):
+    search_term = f"{st.session_state.selected_album['artist']} {st.session_state.selected_album['title']}"
     st.write(f"Searching Archive.org for: '{search_term}'")  # Display search term
 else:
     search_term = st.text_input("Enter Search Term:", key="search_term_input", on_change=None)
@@ -281,11 +285,11 @@ with st.expander("Date Range Filter", expanded=False):
     use_album_year = False
     start_year = None  # Initialize start_year
 
-    if selected_album:
+    if st.session_state.get("selected_album"):
         use_album_year = st.checkbox("Use Album Release Year", value=True)  # Checked by default
 
-    if use_album_year and selected_album:
-        start_year = selected_album['year']
+    if use_album_year and st.session_state.get("selected_album"):
+        start_year = st.session_state.selected_album['year']
         st.write(f"Using album release year: {start_year}")
     else:
         current_year = date.today().year
