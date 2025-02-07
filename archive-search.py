@@ -157,7 +157,7 @@ def download_file(url, filename):
         return None
 
 
-def display_result_details(result, expander_key):
+def display_result_details(result):
     """Displays the details of a selected result, including an audio player with queue and file selection."""
     st.subheader(result['title'])
     if 'creator' in result:
@@ -175,7 +175,7 @@ def display_result_details(result, expander_key):
             unsafe_allow_html=True
         )
         if thumbnail_url:
-            st.image(thumbnail_url, caption=f"Image for {result['title']}", width=300)
+            st.image(thumbnail_url, caption=f"Image for {result['title']}", width=200)
         else:
             st.write("No image available.")
     with col2:
@@ -188,22 +188,28 @@ def display_result_details(result, expander_key):
                     audio_urls = [f"https://archive.org/download/{result['identifier']}/{file['name']}" for file in audio_files]
                     audio_names = [file['name'] for file in audio_files]
 
-                    # Create a playlist using session state to manage selected track
-                    if f'selected_track_index_{result["identifier"]}' not in st.session_state:
-                        st.session_state[f'selected_track_index_{result["identifier"]}'] = 0
+                    # Session state key for the expander
+                    show_queue_key = f"show_queue_{result['identifier']}"
 
-                    def play_track(index, identifier):
-                        st.session_state[f'selected_track_index_{identifier}'] = index
-                        st.rerun()  # Force a rerun to update the player
+                    # Initialize expander state in session state if it doesn't exist
+                    if show_queue_key not in st.session_state:
+                        st.session_state[show_queue_key] = False
 
-                    # Display track list within an expander
-                    with st.expander("Music Queue", expanded=False, key=expander_key):
-                        for i, name in enumerate(audio_names):
-                            if st.button(f"Play: {name}", key=f"play_button_{result['identifier']}_{i}"):
-                                play_track(i, result['identifier'])
+                    # Button to toggle queue visibility
+                    if st.button(f"{'Hide' if st.session_state[show_queue_key] else 'Show'} Music Queue", key=f"toggle_queue_{result['identifier']}"):
+                        st.session_state[show_queue_key] = not st.session_state[show_queue_key]
+                        st.rerun()
+
+                    # Conditionally display the music queue
+                    if st.session_state[show_queue_key]:
+                        with st.container():
+                            for i, name in enumerate(audio_names):
+                                if st.button(f"Play: {name}", key=f"play_button_{result['identifier']}_{i}"):
+                                    st.session_state[f'selected_track_index_{result["identifier"]}'] = i
+                                    st.rerun()
 
                     # Generate the audio player HTML with the selected track
-                    selected_track_index = st.session_state[f'selected_track_index_{result["identifier"]}']
+                    selected_track_index = st.session_state.get(f'selected_track_index_{result["identifier"]}', 0)
                     selected_audio_url = audio_urls[selected_track_index]
                     try:
                         response = requests.head(selected_audio_url, allow_redirects=True)
@@ -235,7 +241,8 @@ def display_result_details(result, expander_key):
                                 data=file_bytes,
                                 file_name=selected_file,
                                 mime="application/octet-stream",
-                                key=f"download_button_{result['identifier']}_{selected_file}")
+                                key=f"download_button_{result['identifier']}_{selected_file}"
+                            )
             else:
                 st.warning("No files found for this item.")
 
@@ -306,7 +313,7 @@ if st.session_state.get("selected_album"):
     search_term = f"{st.session_state.selected_album['artist']} {st.session_state.selected_album['title']}"
     st.write(f"Searching Archive.org for: '{search_term}'")  # Display search term
 else:
-    search_term = st.text_input("Enter Search Term:", key="search_term_input", on_change=None)
+    search_term = st.text_input("Enter Search Term:", key="search_term_input", value="")
 
 # Media Type Selection
 media_type = st.radio(
@@ -367,8 +374,9 @@ if search_term or search_button_pressed:
             try:
                 # Pass the start_year to search_archive
                 results = search_archive(search_term, selected_media_type, start_year=start_year, start_month=start_month, start_day=start_day, end_year=end_year, end_month=end_month, end_day=end_day)
+                st.session_state.results = results
                 filtered_results = filter_results_by_file_types(results, file_types_filter)
-                st.session_state.results = filtered_results
+                st.session_state.filtered_results = filtered_results
             except Exception as e:
                 st.error(f"An error occurred: {e}")
                 st.session_state.results = None
@@ -378,14 +386,12 @@ else:
 
 # Display the popup panel if a result is selected
 if st.session_state.get("selected_result_identifier"):
-    selected_result = next((result for result in st.session_state.results if
-                            result['identifier'] == st.session_state.selected_result_identifier), None)
+    selected_result = next((result for result in st.session_state.get("filtered_results", [])
+                            if result['identifier'] == st.session_state.selected_result_identifier), None)
 
-    #Pass a default if there are no results
     if selected_result:
-        expander_key = st.session_state.get("expander_key", f"default_expander_{selected_result['identifier']}")
-        with st.expander("Result Details", expanded=True):
-            display_result_details(selected_result, expander_key)
+        with st.container():
+            display_result_details(selected_result)
     else:
         st.error("Selected result not found.")
         st.session_state.selected_result_identifier = None
@@ -429,4 +435,3 @@ if st.session_state.results:
             button_key = f"details_{i}"
             if st.button(f"Show Details", key=button_key):
                 st.session_state.selected_result_identifier = result['identifier']
-                st.session_state.expander_key = f"expander_{result['identifier']}"
