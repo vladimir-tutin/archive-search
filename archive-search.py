@@ -275,17 +275,73 @@ if st.session_state.results:
             button_key = f"details_{i}"
             if st.button(f"Show Details", key=button_key):
                 st.session_state.selected_result_identifier = result['identifier']  # Store the identifier
-                st.session_state.expander_key = f"expander_{result['identifier']}"  # Store expander key
 
-    # Display the popup panel if a result is selected
+    # Popup Panel Logic
     if st.session_state.get("selected_result_identifier"):
         selected_result = next((result for result in st.session_state.results if
                                 result['identifier'] == st.session_state.selected_result_identifier), None)
 
         if selected_result:
-            expander_key = st.session_state.get("expander_key", "default_expander")
-            with st.expander("Result Details", expanded=True):
-                display_result_details(selected_result)
+            # CSS for the overlay and popup
+            st.markdown(
+                """
+                <style>
+                .overlay {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black */
+                    z-index: 9998; /* Ensure it's above other content */
+                }
+                .popup {
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background-color: white;
+                    padding: 20px;
+                    border-radius: 5px;
+                    z-index: 9999; /* Ensure it's above the overlay */
+                    width: 80%; /* Adjust as needed */
+                    max-height: 80%; /* Adjust as needed */
+                    overflow: auto; /* Enable scrolling if content overflows */
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            # Create the overlay
+            st.markdown('<div class="overlay"></div>', unsafe_allow_html=True)
+
+            # Create the popup content
+            with st.container():  # Use a container to group elements
+                st.markdown('<div class="popup">', unsafe_allow_html=True)
+                display_result_details(selected_result)  # Display the result details
+
+                # Close button
+                if st.button("Close"):
+                    st.session_state.selected_result_identifier = None  # Clear the selection
+                    st.rerun()  # Force a rerun to remove the popup
+
+                st.markdown('</div>', unsafe_allow_html=True) # close the popup div
+
+            # Add JavaScript to close the popup on outside click
+            st.components.v1.html(
+                """
+                <script>
+                const overlay = document.querySelector('.overlay');
+                if (overlay) {
+                    overlay.addEventListener('click', function() {
+                        Streamlit.setComponentValue(null) // Or any other value to trigger a rerun
+                    });
+                }
+                </script>
+                """,
+                height=0,
+            )
         else:
             st.error("Selected result not found.")
             st.session_state.selected_result_identifier = None  # Clear the selection
