@@ -228,27 +228,35 @@ artist_name = st.text_input("Enter Artist Name:", key="artist_name_input")
 
 album_search_button = st.button("Search Album (MusicBrainz)", key="album_search_button")
 
+# Initialize session state for musicbrainz_results and selected_album
+if 'musicbrainz_results' not in st.session_state:
+    st.session_state.musicbrainz_results = []
+if 'selected_album' not in st.session_state:
+    st.session_state.selected_album = None
+
 musicbrainz_results = []
 if album_search_button and album_title and artist_name:
     with st.spinner(f"Searching MusicBrainz for '{album_title}' by '{artist_name}'..."):
         musicbrainz_results, musicbrainz_error = search_musicbrainz_album(album_title, artist_name)
         if musicbrainz_error:
             st.error(musicbrainz_error)
-    st.session_state.musicbrainz_results = musicbrainz_results  # Store results in session state
-else:
-    st.session_state.musicbrainz_results = []
+        st.session_state.musicbrainz_results = musicbrainz_results  # Store results in session state
 
 # Display MusicBrainz Results
-selected_album = None
 if st.session_state.get("musicbrainz_results"):
     st.subheader("MusicBrainz Results")
     album_options = [f"{result['artist']} - {result['title']} ({result['year']})" for result in st.session_state.musicbrainz_results if result['year']]
-    selected_album_display = st.selectbox("Select an album:", album_options, key="musicbrainz_album_select")
+    default_index = 0 if album_options else None  # Select first if available, else None
+    selected_album_display = st.selectbox("Select an album:", album_options, key="musicbrainz_album_select", index=default_index)
+
 
     # Find the selected album
-    selected_album = next((result for result in st.session_state.musicbrainz_results
-                           if f"{result['artist']} - {result['title']} ({result['year']})" == selected_album_display), None)
-    st.session_state.selected_album = selected_album  # Store selected album in session state
+    if selected_album_display: #Only update if a selection is made
+        selected_album = next((result for result in st.session_state.musicbrainz_results
+                               if f"{result['artist']} - {result['title']} ({result['year']})" == selected_album_display), None)
+        st.session_state.selected_album = selected_album  # Store selected album in session state
+    else:
+        st.session_state.selected_album = None
 else:
     st.session_state.selected_album = None
 
