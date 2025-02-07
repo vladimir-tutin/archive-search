@@ -98,70 +98,76 @@ def download_file(url, filename):
 def display_result_details(result):
     """Displays the details of a selected result, including an audio player if applicable."""
     st.subheader(result['title'])
-    if 'creator' in result:
-        st.write(f"**Creator:** {result['creator']}")
-    st.write(f"**Identifier:** {result['identifier']}")
-    item_url = f"https://archive.org/details/{result['identifier']}"
-    st.markdown(f"[View on Archive.org]({item_url})")
 
-    # Display the thumbnail in the details section, limiting the width
-    thumbnail_url = get_thumbnail_url(result['identifier'])
-    if thumbnail_url:
-        try:
-            # Use HTML and CSS to limit the image width
-            st.markdown(
-                f"""
-                <div style="max-width: 300px;">
-                    <img src="{thumbnail_url}" style="width: 100%; object-fit: contain;">
-                    <p style="text-align: center; font-size: smaller;">Image for {result['title']}</p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-        except Exception as e:
-            st.write(f"Error displaying image: {e}")
-            st.write("No image available.")
-    else:
-        st.write("No image available.")
+    # Create two columns for the image and details/files
+    col1, col2 = st.columns([1, 2])  # Adjust column widths as needed
 
-    # Retrieve files for the selected item
-    with st.spinner(f"Retrieving files for '{result['title']}'..."):
-        files = get_item_files(result['identifier'])
-        if files:
-            audio_files = [file for file in files if file['name'].lower().endswith(('.mp3', '.wav', '.flac', '.ogg'))]
-            if audio_files:
-                st.subheader("Audio Player")
-                audio_urls = [f"https://archive.org/download/{result['identifier']}/{file['name']}" for file in audio_files]
-                # Create a playlist using the audio URLs
-                playlist_html = f"""
-                    <audio controls autoplay>
-                        {''.join([f'<source src="{url}" type="audio/{url.split(".")[-1]}">' for url in audio_urls])}
-                        Your browser does not support the audio element.
-                    </audio>
-                """
-                st.components.v1.html(playlist_html, height=100)  # Adjust height as needed
-
-            st.subheader("Files:")
-            file_names = [file['name'] for file in files]
-            selected_file = st.selectbox("Select a file to download:", file_names,
-                                          key=f"file_select_{result['identifier']}")  # Unique key!
-            if selected_file:
-                selected_file_data = next((file for file in files if file['name'] == selected_file), None)
-                download_url = f"https://archive.org/download/{result['identifier']}/{selected_file_data['name']}"
-                # Immediately trigger download
-                with st.spinner(f"Downloading '{selected_file}'..."):
-                    file_bytes = download_file(download_url, selected_file)
-                    if file_bytes:
-                        st.download_button(
-                            label=f"Download '{selected_file}'",
-                            data=file_bytes,
-                            file_name=selected_file,
-                            mime="application/octet-stream",  # Generic binary file type
-                            key=f"download_button_{result['identifier']}_{selected_file}",
-                            # Use a unique key
-                        )
+    with col1:
+        # Display the thumbnail in the details section, limiting the width
+        thumbnail_url = get_thumbnail_url(result['identifier'])
+        if thumbnail_url:
+            try:
+                # Use HTML and CSS to limit the image width
+                st.markdown(
+                    f"""
+                    <div style="max-width: 300px;">
+                        <img src="{thumbnail_url}" style="width: 100%; object-fit: contain;">
+                        <p style="text-align: center; font-size: smaller;">Image for {result['title']}</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            except Exception as e:
+                st.write(f"Error displaying image: {e}")
+                st.write("No image available.")
         else:
-            st.warning("No files found for this item.")
+            st.write("No image available.")
+
+    with col2:
+        if 'creator' in result:
+            st.write(f"**Creator:** {result['creator']}")
+        st.write(f"**Identifier:** {result['identifier']}")
+        item_url = f"https://archive.org/details/{result['identifier']}"
+        st.markdown(f"[View on Archive.org]({item_url})")
+
+        # Retrieve files for the selected item
+        with st.spinner(f"Retrieving files for '{result['title']}'..."):
+            files = get_item_files(result['identifier'])
+            if files:
+                audio_files = [file for file in files if file['name'].lower().endswith(('.mp3', '.wav', '.flac', '.ogg'))]
+                if audio_files:
+                    st.subheader("Audio Player")
+                    audio_urls = [f"https://archive.org/download/{result['identifier']}/{file['name']}" for file in audio_files]
+                    # Create a playlist using the audio URLs
+                    playlist_html = f"""
+                        <audio controls autoplay>
+                            {''.join([f'<source src="{url}" type="audio/{url.split(".")[-1]}">' for url in audio_urls])}
+                            Your browser does not support the audio element.
+                        </audio>
+                    """
+                    st.components.v1.html(playlist_html, height=100)  # Adjust height as needed
+
+                st.subheader("Files:")
+                file_names = [file['name'] for file in files]
+                selected_file = st.selectbox("Select a file to download:", file_names,
+                                              key=f"file_select_{result['identifier']}")  # Unique key!
+                if selected_file:
+                    selected_file_data = next((file for file in files if file['name'] == selected_file), None)
+                    download_url = f"https://archive.org/download/{result['identifier']}/{selected_file_data['name']}"
+                    # Immediately trigger download
+                    with st.spinner(f"Downloading '{selected_file}'..."):
+                        file_bytes = download_file(download_url, selected_file)
+                        if file_bytes:
+                            st.download_button(
+                                label=f"Download '{selected_file}'",
+                                data=file_bytes,
+                                file_name=selected_file,
+                                mime="application/octet-stream",  # Generic binary file type
+                                key=f"download_button_{result['identifier']}_{selected_file}",
+                                # Use a unique key
+                            )
+            else:
+                st.warning("No files found for this item.")
 
 def get_thumbnail_url(identifier):
     """
