@@ -14,7 +14,7 @@ import random
 musicbrainzngs.set_useragent("ArchiveOrgSearch", "1.0", "your_email@example.com")  # Replace with your email
 
 def search_musicbrainz_album(album_title=None, artist_name=None, retry_count=0, max_retries=3):
-    """Searches MusicBrainz for albums with retry logic, handling missing artist/album."""
+    """Searches MusicBrainz for albums (release groups) with retry logic, handling missing artist/album."""
     try:
         query = ""
         if artist_name:
@@ -37,12 +37,14 @@ def search_musicbrainz_album(album_title=None, artist_name=None, retry_count=0, 
             album_results = []
             for rg in results['release-group-list']:
                 try:
-                    album_results.append({
-                        'artist': rg['artist-credit'][0]['artist']['name'],
-                        'title': rg['title'],
-                        'year': int(rg['first-release-date'][:4]) if 'first-release-date' in rg and rg['first-release-date'] else None,  # Extract year
-                        'musicbrainz_id': rg['id']
-                    })
+                    #Check if it is an album
+                    if rg.get('primary-type') == 'Album':
+                        album_results.append({
+                            'artist': rg['artist-credit'][0]['artist']['name'],
+                            'title': rg['title'],
+                            'year': int(rg['first-release-date'][:4]) if 'first-release-date' in rg and rg['first-release-date'] else None,  # Extract year
+                            'musicbrainz_id': rg['id']
+                        })
                 except Exception as e:
                     print(f"Error processing a MusicBrainz result: {e}")
                     continue
