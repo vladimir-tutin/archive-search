@@ -194,6 +194,7 @@ def display_result_details(result):
 
                     def play_track(index):
                         st.session_state.selected_track_index = index
+                        st.rerun()  # Force a rerun to update the player
 
                     # Display track list with buttons to play each track
                     for i, name in enumerate(audio_names):
@@ -201,7 +202,8 @@ def display_result_details(result):
                             play_track(i)
 
                     # Generate the audio player HTML with the selected track
-                    selected_audio_url = audio_urls[st.session_state.selected_track_index]
+                    selected_track_index = st.session_state.selected_track_index
+                    selected_audio_url = audio_urls[selected_track_index]
                     playlist_html = f"""
                         <audio controls autoplay>
                             <source src="{selected_audio_url}" type="audio/{selected_audio_url.split(".")[-1]}">
@@ -288,8 +290,6 @@ if st.session_state.get("musicbrainz_results"):
         st.session_state.selected_album = selected_album  # Store selected album in session state
     else:
         st.session_state.selected_album = None
-else:
-    st.session_state.selected_album = None
 
 # Main Search Section
 st.subheader("Archive.org Search")
