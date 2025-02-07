@@ -1,4 +1,6 @@
 import streamlit as st
+import streamlit.components.v1 as components
+from datetime import date
 import time
 import internetarchive
 import io
@@ -6,7 +8,67 @@ import requests
 from PIL import Image
 import base64
 import re
-from datetime import date
+
+# Define the HTML/JavaScript component for the date range picker
+date_range_picker_html = """
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+    function createDateRangePicker(element, startDate, endDate) {
+        flatpickr(element, {
+            mode: "range",
+            dateFormat: "Y-m-d",
+            defaultDate: [startDate, endDate],
+            onClose: function(selectedDates, dateStr, instance) {
+                // Notify Streamlit when the date range changes
+                let event = new Event('dateRangeChange');
+                event.dateRange = dateStr;
+                window.dispatchEvent(event);
+            }
+        });
+    }
+
+    window.addEventListener('load', function() {
+        // Initialize the date range picker with default dates
+        let startDate = '%s'; // Placeholder for start date
+        let endDate = '%s';   // Placeholder for end date
+        createDateRangePicker(document.getElementById('dateRangePicker'), startDate, endDate);
+
+        // Listen for changes from Streamlit
+        window.addEventListener('streamlit:componentInit', function() {
+            createDateRangePicker(document.getElementById('dateRangePicker'), startDate, endDate);
+        });
+    });
+</script>
+<div id="dateRangePicker"></div>
+"""
+
+def date_range_picker(start_date=None, end_date=None):
+    """Embeds a date range picker component into Streamlit."""
+
+    # Format dates as strings for the component
+    start_date_str = start_date.strftime("%Y-%m-%d") if start_date else ""
+    end_date_str = end_date.strftime("%Y-%m-%d") if end_date else ""
+
+    # Inject the dates into the HTML
+    html_code = date_range_picker_html % (start_date_str, end_date_str)
+
+    # Embed the component
+    components.html(html_code, height=100)
+
+    # Listen for date range changes from the component
+    date_range = st.session_state.get("date_range", None)  # Get the date range from session state
+    if date_range:
+        try:
+            start_str, end_str = date_range.split(" to ")
+            start_date = date.fromisoformat(start_str)
+            end_date = date.fromisoformat(end_str)
+            return start_date, end_date
+        except ValueError:
+            st.warning("Invalid date range format.")
+            return None, None  # Or return the defaults
+
+    return None, None  # Return None if no date range selected
 
 def search_archive(search_term, media_type, start_date=None, end_date=None):
     """
@@ -163,6 +225,30 @@ def get_zip_download_url(identifier):
 # Streamlit UI
 st.title("Archive.org Search")
 
+# Default Dates
+default_start_date = date(1900, 1, 1)  # Wider range
+default_end_date = date.today()
+
+# Date Range Picker
+with st.expander("Date Range Filter", expanded=False):
+    start_date, end_date = date_range_picker(default_start_date, default_end_date)
+
+    # Store the selected date range in session state
+    def handle_date_range_change():
+        st.session_state["date_range"] = st.session_state.date_range_input  # Store the value from the text input
+    st.text_input("Selected Date Range:", key="date_range_input", on_change=handle_date_range_change)
+
+    # Listen for events from the date range picker
+    js = f"""
+    <script>
+    window.addEventListener('dateRangeChange', function(e) {{
+        const dateRange = e.dateRange;
+        Streamlit.setComponentValue(dateRange); // Send the value to Streamlit
+    }});
+    </script>
+    """
+    components.html(js)
+
 # Search Term Input
 search_term = st.text_input("Enter Search Term:", key="search_term_input", on_change=None)
 
@@ -184,15 +270,6 @@ selected_media_type = media_type_mapping[media_type]
 # File Type Filter
 file_types_filter = st.text_input("Filter by File Types (space-separated, e.g., mp3 flac pdf):",
                                    key="file_types_input")
-
-# Date Range Filter
-default_start_date = date(1990, 1, 1)
-default_end_date = date.today()
-
-# Use an expander to keep the UI clean
-with st.expander("Date Range Filter", expanded=False):
-    start_date = st.date_input("Start Date", value=default_start_date, key="start_date")
-    end_date = st.date_input("End Date", value=default_end_date, key="end_date")
 
 # Search Button
 search_button_pressed = st.button("Search", key="search_button")
