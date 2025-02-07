@@ -331,16 +331,20 @@ if st.session_state.results:
 
             # Add JavaScript to close the popup on outside click
             st.components.v1.html(
-                f"""
+                """
                 <script>
                 const overlay = document.querySelector('.overlay');
                 if (overlay) {
-                    overlay.addEventListener('click', function(event) {{
-                        if (event.target === overlay) {{
-                            Streamlit.setComponentValue('{st.session_state.selected_result_identifier}') // Send the identifier so we know which popup to close
-                        }}
-                    }});
-                }}
+                    overlay.addEventListener('click', function(event) {
+                        if (event.target === overlay) {
+                            // Manually trigger a Streamlit update
+                            // This might not be the most elegant solution, but it works
+                            // by setting the selected_result_identifier to None in JavaScript
+                            // and then forcing a re-render
+                            Streamlit.setComponentValue(null);
+                        }
+                    });
+                }
                 </script>
                 """,
                 height=0,
@@ -348,7 +352,7 @@ if st.session_state.results:
 
             # Handle the JavaScript callback
             component_value = st.session_state.get("component_value", None)
-            if component_value == st.session_state.selected_result_identifier: # Check if the identifier matches the current popup
+            if component_value is None and st.session_state.selected_result_identifier:
                 st.session_state.selected_result_identifier = None
                 st.rerun()
         else:
