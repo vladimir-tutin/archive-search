@@ -117,7 +117,7 @@ def display_result_details(result):
             unsafe_allow_html=True
         )
         if thumbnail_url:
-            st.image(thumbnail_url, caption=f"Image for {result['title']}", width=300)  # Set max width
+            st.image(thumbnail_url, caption=f"Image for {result['title']}", width=200)  # Set max width
         else:
             st.write("No image available.")
 
