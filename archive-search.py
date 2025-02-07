@@ -7,41 +7,47 @@ from PIL import Image
 import base64
 import re
 from datetime import date
-import discogs_client
-import json
+import musicbrainzngs
+import random
 
-# Configure Discogs API client
-DISCOGS_TOKEN = st.secrets.get("DISCOGS_TOKEN")  # Store your Discogs token in Streamlit secrets
-if not DISCOGS_TOKEN:
-    st.warning("Please add your Discogs token to Streamlit secrets as DISCOGS_TOKEN.")
+# Configure MusicBrainz
+musicbrainzngs.set_useragent("ArchiveOrgSearch", "1.0", "patrick.d.coy@gmail.com")  # Replace with your email
 
-def search_discogs_album(album_title, artist_name):
-    """Searches Discogs for albums and returns a list of possible results."""
-    if not DISCOGS_TOKEN:
-        return [], "Discogs token not configured."
-
+def search_musicbrainz_album(album_title, artist_name, retry_count=0, max_retries=3):
+    """Searches MusicBrainz for albums with retry logic."""
     try:
-        d = discogs_client.Client('ArchiveOrgSearch/1.0', user_token=DISCOGS_TOKEN)
-        results = d.search(f"{artist_name} - {album_title}", type='release')
-        if results:
+        results = musicbrainzngs.search_release_groups(
+            query=f'artist:"{artist_name}" AND release:"{album_title}"',
+            limit=10  # Limit the number of results
+        )
+
+        if 'release-group-list' in results:
             album_results = []
-            for result in results:
+            for rg in results['release-group-list']:
                 try:
                     album_results.append({
-                        'artist': result.artists[0].name if result.artists else "Unknown Artist",
-                        'title': result.title,
-                        'year': result.year,
-                        'discogs_id': result.id
+                        'artist': rg['artist-credit'][0]['artist']['name'],
+                        'title': rg['title'],
+                        'year': int(rg['first-release-date'][:4]) if 'first-release-date' in rg and rg['first-release-date'] else None,  # Extract year
+                        'musicbrainz_id': rg['id']
                     })
                 except Exception as e:
-                    print(f"Error processing a Discogs result: {e}")
-                    continue  # Skip this result and continue with the next
-
+                    print(f"Error processing a MusicBrainz result: {e}")
+                    continue
             return album_results, None
         else:
-            return [], "No album found on Discogs."
+            return [], "No album found on MusicBrainz."
+
+    except musicbrainzngs.NetworkError as e:
+        if retry_count < max_retries:
+            wait_time = (2 ** retry_count) + random.random()
+            st.warning(f"Network error from MusicBrainz. Retrying in {wait_time:.2f} seconds (attempt {retry_count + 1}/{max_retries}).")
+            time.sleep(wait_time)
+            return search_musicbrainz_album(album_title, artist_name, retry_count + 1, max_retries)
+        else:
+            return [], "MusicBrainz network error after multiple retries."
     except Exception as e:
-        return [], f"Error searching Discogs: {e}"
+        return [], f"Error searching MusicBrainz: {e}"
 
 
 def search_archive(search_term, media_type, start_year=None, start_month=None, start_day=None, end_year=None, end_month=None, end_day=None):
@@ -219,24 +225,24 @@ st.subheader("Album Search")
 album_title = st.text_input("Enter Album Title:", key="album_title_input")
 artist_name = st.text_input("Enter Artist Name:", key="artist_name_input")
 
-album_search_button = st.button("Search Album (Discogs)", key="album_search_button")
+album_search_button = st.button("Search Album (MusicBrainz)", key="album_search_button")
 
-discogs_results = []
+musicbrainz_results = []
 if album_search_button and album_title and artist_name:
-    with st.spinner(f"Searching Discogs for '{album_title}' by '{artist_name}'..."):
-        discogs_results, discogs_error = search_discogs_album(album_title, artist_name)
-        if discogs_error:
-            st.error(discogs_error)
+    with st.spinner(f"Searching MusicBrainz for '{album_title}' by '{artist_name}'..."):
+        musicbrainz_results, musicbrainz_error = search_musicbrainz_album(album_title, artist_name)
+        if musicbrainz_error:
+            st.error(musicbrainz_error)
 
-# Display Discogs Results
+# Display MusicBrainz Results
 selected_album = None
-if discogs_results:
-    st.subheader("Discogs Results")
-    album_options = [f"{result['artist']} - {result['title']} ({result['year']})" for result in discogs_results]
-    selected_album_display = st.selectbox("Select an album:", album_options, key="discogs_album_select")
+if musicbrainz_results:
+    st.subheader("MusicBrainz Results")
+    album_options = [f"{result['artist']} - {result['title']} ({result['year']})" for result in musicbrainz_results if result['year']]
+    selected_album_display = st.selectbox("Select an album:", album_options, key="musicbrainz_album_select")
 
     # Find the selected album
-    selected_album = next((result for result in discogs_results
+    selected_album = next((result for result in musicbrainz_results
                            if f"{result['artist']} - {result['title']} ({result['year']})" == selected_album_display), None)
 
 # Main Search Section
