@@ -103,52 +103,59 @@ def display_result_details(result):
     st.write(f"**Identifier:** {result['identifier']}")
     item_url = f"https://archive.org/details/{result['identifier']}"
     st.markdown(f"[View on Archive.org]({item_url})")
-    if 'image' in result:
-        image_url = result['image']
-        st.image(image_url, caption=f"Image for {result['title']}", use_container_width=True)  # Changed here
-    else:
-        st.write("No image available.")
 
-    # Retrieve files for the selected item
-    with st.spinner(f"Retrieving files for '{result['title']}'..."):
-        files = get_item_files(result['identifier'])
-        if files:
-            audio_files = [file for file in files if file['name'].lower().endswith(('.mp3', '.wav', '.flac', '.ogg'))]
+    # Thumbnail URL
+    thumbnail_url = get_thumbnail_url(result['identifier'])
 
-            if audio_files:
-                st.subheader("Audio Player")
-                audio_urls = [f"https://archive.org/download/{result['identifier']}/{file['name']}" for file in audio_files]
+    col1, col2 = st.columns([1, 2])  # Adjust the ratio as needed
 
-                # Create a playlist using the audio URLs
-                playlist_html = f"""
-                    <audio controls autoplay>
-                        {''.join([f'<source src="{url}" type="audio/{url.split(".")[-1]}">' for url in audio_urls])}
-                        Your browser does not support the audio element.
-                    </audio>
-                """
-                st.components.v1.html(playlist_html, height=100)  # Adjust height as needed
-
-            st.subheader("Files:")
-            file_names = [file['name'] for file in files]
-            selected_file = st.selectbox("Select a file to download:", file_names,
-                                          key=f"file_select_{result['identifier']}")  # Unique key!
-            if selected_file:
-                selected_file_data = next((file for file in files if file['name'] == selected_file), None)
-                download_url = f"https://archive.org/download/{result['identifier']}/{selected_file_data['name']}"
-                # Immediately trigger download
-                with st.spinner(f"Downloading '{selected_file}'..."):
-                    file_bytes = download_file(download_url, selected_file)
-                    if file_bytes:
-                        st.download_button(
-                            label=f"Download '{selected_file}'",
-                            data=file_bytes,
-                            file_name=selected_file,
-                            mime="application/octet-stream",  # Generic binary file type
-                            key=f"download_button_{result['identifier']}_{selected_file}",
-                            # Use a unique key
-                        )
+    with col1:
+        if thumbnail_url:
+            st.image(thumbnail_url, caption=f"Image for {result['title']}", width=300)  # Set max width
         else:
-            st.warning("No files found for this item.")
+            st.write("No image available.")
+
+    with col2:
+        # Retrieve files for the selected item
+        with st.spinner(f"Retrieving files for '{result['title']}'..."):
+            files = get_item_files(result['identifier'])
+            if files:
+                audio_files = [file for file in files if file['name'].lower().endswith(('.mp3', '.wav', '.flac', '.ogg'))]
+                if audio_files:
+                    st.subheader("Audio Player")
+                    audio_urls = [f"https://archive.org/download/{result['identifier']}/{file['name']}" for file in audio_files]
+                    # Create a playlist using the audio URLs
+                    playlist_html = f"""
+                        <audio controls autoplay>
+                            {''.join([f'<source src="{url}" type="audio/{url.split(".")[-1]}">' for url in audio_urls])}
+                            Your browser does not support the audio element.
+                        </audio>
+                    """
+                    st.components.v1.html(playlist_html, height=100)  # Adjust height as needed
+
+                st.subheader("Files:")
+                file_names = [file['name'] for file in files]
+                selected_file = st.selectbox("Select a file to download:", file_names,
+                                              key=f"file_select_{result['identifier']}")  # Unique key!
+
+                if selected_file:
+                    selected_file_data = next((file for file in files if file['name'] == selected_file), None)
+                    download_url = f"https://archive.org/download/{result['identifier']}/{selected_file_data['name']}"
+
+                    # Immediately trigger download
+                    with st.spinner(f"Downloading '{selected_file}'..."):
+                        file_bytes = download_file(download_url, selected_file)
+                        if file_bytes:
+                            st.download_button(
+                                label=f"Download '{selected_file}'",
+                                data=file_bytes,
+                                file_name=selected_file,
+                                mime="application/octet-stream",  # Generic binary file type
+                                key=f"download_button_{result['identifier']}_{selected_file}",
+                                # Use a unique key
+                            )
+            else:
+                st.warning("No files found for this item.")
 
 def get_thumbnail_url(identifier):
     """
@@ -170,7 +177,6 @@ def get_zip_download_url(identifier):
     except Exception as e:
         print(f"Error getting ZIP download URL for {identifier}: {e}")
         return None
-
 
 # Streamlit UI
 st.title("Archive.org Search")
@@ -226,6 +232,18 @@ else:
     if 'results' not in st.session_state:
         st.session_state.results = None
 
+# Display the popup panel if a result is selected (moved before results grid)
+if st.session_state.get("selected_result_identifier"):
+    selected_result = next((result for result in st.session_state.results if
+                            result['identifier'] == st.session_state.selected_result_identifier), None)
+    if selected_result:
+        expander_key = st.session_state.get("expander_key", "default_expander")
+        with st.expander("Result Details", expanded=True):
+            display_result_details(selected_result)
+    else:
+        st.error("Selected result not found.")
+        st.session_state.selected_result_identifier = None  # Clear the selection
+
 # Display results in a grid
 if st.session_state.results:
     num_columns = 5
@@ -240,14 +258,14 @@ if st.session_state.results:
         with cols[i % num_columns]:
             # Display image if available, otherwise display title
             thumbnail_url = get_thumbnail_url(result['identifier'])
+
             if thumbnail_url:
                 try:
                     response = requests.get(thumbnail_url)
                     response.raise_for_status()
                     image = Image.open(io.BytesIO(response.content))
-
                     zip_download_url = get_zip_download_url(result['identifier'])
-                    # Create a download button URL
+
                     # Use HTML/CSS for overlapping button
                     if zip_download_url:
                         st.markdown(
@@ -276,16 +294,3 @@ if st.session_state.results:
             if st.button(f"Show Details", key=button_key):
                 st.session_state.selected_result_identifier = result['identifier']  # Store the identifier
                 st.session_state.expander_key = f"expander_{result['identifier']}"  # Store expander key
-
-    # Display the popup panel if a result is selected
-    if st.session_state.get("selected_result_identifier"):
-        selected_result = next((result for result in st.session_state.results if
-                                result['identifier'] == st.session_state.selected_result_identifier), None)
-
-        if selected_result:
-            expander_key = st.session_state.get("expander_key", "default_expander")
-            with st.expander("Result Details", expanded=True):
-                display_result_details(selected_result)
-        else:
-            st.error("Selected result not found.")
-            st.session_state.selected_result_identifier = None  # Clear the selection
