@@ -250,35 +250,15 @@ if st.session_state.results:
         with cols[i % num_columns]:
             # Display image if available, otherwise display title
             thumbnail_url = get_thumbnail_url(result['identifier'])
+
+            # Use the thumbnail URL directly in the image display
             if thumbnail_url:
                 try:
-                    response = requests.get(thumbnail_url)
-                    response.raise_for_status()
-                    image = Image.open(io.BytesIO(response.content))
-                    zip_download_url = get_zip_download_url(result['identifier'])
+                    st.image(thumbnail_url, caption=result['title'], use_column_width=True)
+                except Exception as e:
+                    st.error(f"Error displaying thumbnail: {e}")
+                    st.write(result['title']) # Fallback to just title
 
-                    # Use HTML/CSS for overlapping button
-                    if zip_download_url:
-                        st.markdown(
-                            f"""
-                            <div style="position: relative;">
-                                <div style="height:{image_height}px; overflow: hidden;">
-                                    <img src="{thumbnail_url}" style="width: 100%; object-fit: contain;">
-                                </div>
-                                <div style="position: absolute; bottom: 5px; right: 5px;">
-                                    <a href="{zip_download_url}" download="{result['identifier']}.zip" style="background-color: #4CAF50; border: none; color: white; padding: 5px 10px; text-align: center; text-decoration: none; display: inline-block; font-size: 10px; cursor: pointer; border-radius: 5px;">Download Zip</a>
-                                </div>
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
-                    else:
-                        st.write("Download not available.")
-
-                    st.caption(result['title'])  # Display title below the image
-
-                except:
-                    st.write(result['title'])
             else:
                 st.write(result['title'])
 
