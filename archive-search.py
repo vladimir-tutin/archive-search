@@ -332,18 +332,22 @@ file_types_filter = st.text_input("Filter by File Types (space-separated, e.g., 
 # Date Range Filter (Simplified)
 with st.expander("Date Range Filter", expanded=False):
     use_album_year = False
-    start_year = None  # Initialize start_year
+    start_year_str = st.text_input("Year (Optional):", key="start_year_input", value="")  # Text input for year
 
     if st.session_state.get("selected_album"):
-        use_album_year = st.checkbox("Use Album Release Year", value=True)  # Checked by default
+        use_album_year = st.checkbox("Use Album Release Year", value=False)  # Unchecked by default
 
     if use_album_year and st.session_state.get("selected_album"):
         start_year = st.session_state.selected_album['year']
         st.write(f"Using album release year: {start_year}")
     else:
-        current_year = date.today().year
-        year_options = list(range(1900, current_year + 1))
-        start_year = st.selectbox("Year", year_options, index=len(year_options) - 1, key="start_year")
+        start_year = None
+        if start_year_str:
+            try:
+                start_year = int(start_year_str)
+            except ValueError:
+                st.error("Invalid year format. Please enter a number.")
+                start_year = None
 
     # Disable month and day selection when using album release year
     start_month = None
