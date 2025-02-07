@@ -11,7 +11,7 @@ import musicbrainzngs
 import random
 
 # Configure MusicBrainz
-musicbrainzngs.set_useragent("ArchiveOrgSearch", "1.0", "patrick.d.coy@gmail.com")  # Replace with your email
+musicbrainzngs.set_useragent("ArchiveOrgSearch", "1.0", "your_email@example.com")  # Replace with your email
 
 def search_musicbrainz_album(album_title, artist_name, retry_count=0, max_retries=3):
     """Searches MusicBrainz for albums with retry logic."""
@@ -73,6 +73,7 @@ def search_archive(search_term, media_type, start_year=None, start_month=None, s
         start_date = None
         end_date = None
 
+        # Set the date range to the entire year if only the year is provided
         if start_year:
             try:
                 start_date = date(start_year, 1, 1)
@@ -308,7 +309,8 @@ if search_term or search_button_pressed:
     else:
         with st.spinner(f"Searching Archive.org for '{search_term}'..."):
             try:
-                results = search_archive(search_term, selected_media_type, start_year, start_month, start_day, end_year, end_month, end_day)
+                # Pass the start_year to search_archive
+                results = search_archive(search_term, selected_media_type, start_year=start_year, start_month=start_month, start_day=start_day, end_year=end_year, end_month=end_month, end_day=end_day)
                 filtered_results = filter_results_by_file_types(results, file_types_filter)
                 st.session_state.results = filtered_results
 
