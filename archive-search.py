@@ -157,7 +157,7 @@ def download_file(url, filename):
         return None
 
 
-def display_result_details(result):
+def display_result_details(result, expander_key):
     """Displays the details of a selected result, including an audio player with queue and file selection."""
     st.subheader(result['title'])
     if 'creator' in result:
@@ -197,7 +197,7 @@ def display_result_details(result):
                         st.rerun()  # Force a rerun to update the player
 
                     # Display track list within an expander
-                    with st.expander("Music Queue", expanded=False, key=f"music_queue_expander_{result['identifier']}"):
+                    with st.expander("Music Queue", expanded=False, key=expander_key):
                         for i, name in enumerate(audio_names):
                             if st.button(f"Play: {name}", key=f"play_button_{result['identifier']}_{i}"):
                                 play_track(i, result['identifier'])
@@ -235,8 +235,7 @@ def display_result_details(result):
                                 data=file_bytes,
                                 file_name=selected_file,
                                 mime="application/octet-stream",
-                                key=f"download_button_{result['identifier']}_{selected_file}"
-                            )
+                                key=f"download_button_{result['identifier']}_{selected_file}")
             else:
                 st.warning("No files found for this item.")
 
@@ -370,12 +369,6 @@ if search_term or search_button_pressed:
                 results = search_archive(search_term, selected_media_type, start_year=start_year, start_month=start_month, start_day=start_day, end_year=end_year, end_month=end_month, end_day=end_day)
                 filtered_results = filter_results_by_file_types(results, file_types_filter)
                 st.session_state.results = filtered_results
-
-                if filtered_results:
-                    st.success(f"Found {len(filtered_results)} results:")
-                else:
-                    st.warning("No results found matching the specified file types.")
-                    st.session_state.results = None
             except Exception as e:
                 st.error(f"An error occurred: {e}")
                 st.session_state.results = None
@@ -387,10 +380,12 @@ else:
 if st.session_state.get("selected_result_identifier"):
     selected_result = next((result for result in st.session_state.results if
                             result['identifier'] == st.session_state.selected_result_identifier), None)
+
+    #Pass a default if there are no results
     if selected_result:
-        expander_key = st.session_state.get("expander_key", "default_expander")
+        expander_key = st.session_state.get("expander_key", f"default_expander_{selected_result['identifier']}")
         with st.expander("Result Details", expanded=True):
-            display_result_details(selected_result)
+            display_result_details(selected_result, expander_key)
     else:
         st.error("Selected result not found.")
         st.session_state.selected_result_identifier = None
