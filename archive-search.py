@@ -11,10 +11,10 @@ import random
 import logging  # Import the logging module
 import os
 import importlib
+from duckduckgo_search import DDGS  # Import DuckDuckGo Search
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 # Constants
 USER_AGENT = "ArchiveOrgSearch/1.0 (your_email@example.com)"  # Replace with your email
 MUSICBRAINZ_LIMIT = None  # 20 # Removed limit
@@ -24,14 +24,11 @@ TEXT_EXTENSIONS = ('.txt', '.epub', '.html', '.htm', '.md')
 PDF_EXTENSION = '.pdf'
 DEFAULT_THUMBNAIL = "placeholder.png"  # Optional placeholder image
 DEFAULT_SELECT_OPTION = "Select an option"
-
 # MusicBrainz Configuration
 musicbrainzngs.set_useragent("ArchiveOrgSearch", "1.0", "your_email@example.com")
-
 # --- Helper Functions ---
 def handle_request_error(e, message="Request failed"):
     st.error(f"{message}: {e}")
-
 def retry_with_backoff(func, args=(), max_retries=3, initial_delay=1):
     """Retries a function with exponential backoff."""
     retries = 0
@@ -51,7 +48,6 @@ def retry_with_backoff(func, args=(), max_retries=3, initial_delay=1):
         except Exception as e:
             st.error(f"An unexpected error occurred: {e}")
             return None #Or raise the exception
-
 def search_archive(search_term, media_type, start_year=None):
     """Searches archive.org with optional year filtering."""
     try:
@@ -74,7 +70,6 @@ def search_archive(search_term, media_type, start_year=None):
     except Exception as e:
         st.error(f"Error during search: {e}")
         return []
-
 def get_item_files(identifier):
     """Retrieves files associated with an item on archive.org."""
     try:
@@ -84,7 +79,6 @@ def get_item_files(identifier):
     except Exception as e:
         st.error(f"Error retrieving item files: {e}")
         return []
-
 def filter_results_by_file_types(results, file_types_str):
     """Filters search results based on specified file types."""
     if not file_types_str:
@@ -97,7 +91,6 @@ def filter_results_by_file_types(results, file_types_str):
         if files and any(file['name'].lower().endswith(tuple(f".{ft}" for ft in file_types)) for file in files):
             filtered_results.append(result)
     return filtered_results
-
 def download_file(url, filename):
     """Downloads a file from the given URL."""
     try:
@@ -107,7 +100,6 @@ def download_file(url, filename):
     except requests.exceptions.RequestException as e:
         handle_request_error(e, "Error downloading file")
         return None
-
 def display_pdf_preview(result, files):
     """Displays a PDF preview section with a dropdown to select PDF files."""
     pdf_files = [file for file in files if file['name'].lower().endswith(PDF_EXTENSION)]
@@ -126,7 +118,6 @@ def display_pdf_preview(result, files):
                     unsafe_allow_html=True)
             except Exception as e:
                 st.error(f"Error displaying PDF: {e}")
-
 def display_result_details(result, media_type):
     """Displays details of a selected result, including audio player and file selection."""
     #st.subheader(result['title']) #move
@@ -197,18 +188,100 @@ def display_result_details(result, media_type):
                         )
                     else:
                         st.warning("No files found for this item.")
-
 def get_thumbnail_url(identifier):
     """Retrieves the URL of the thumbnail image."""
     return f"https://archive.org/services/img/{identifier}"
-
 def get_zip_download_url(identifier):
     """Constructs the zip download URL."""
     return f"https://archive.org/compress/{identifier}"
 
+@st.cache_data(ttl=3600)  # Cache for 1 hour (adjust as needed)
+def cached_search_archive_with_duckduckgo(search_term, media_type, start_year=None, max_results=30, initial_delay=1, max_retries=5):
+    return search_archive_with_duckduckgo(search_term, media_type, start_year, max_results, initial_delay, max_retries)
+
+def search_archive_with_duckduckgo(search_term, media_type, start_year=None, max_results=30, initial_delay=1, max_retries=5):
+    """
+    Searches archive.org using both the IA API and DuckDuckGo.
+    Combines and deduplicates the results.  Handles download URLs.
+    Implements rate limit handling with exponential backoff.
+    """
+
+    # 1. Perform Archive.org API Search
+    ia_results = search_archive(search_term, media_type, start_year)
+    for result in ia_results:
+        result['source'] = 'archive_api'  # Add source field
+
+    # 2. Perform DuckDuckGo Search with Rate Limit Handling
+    ddg_query = f"{search_term} site:archive.org"
+    ddg_results = []
+    retries = 0
+    delay = initial_delay
+
+    while retries <= max_retries:
+        try:
+            with DDGS() as ddgs:
+                for r in ddgs.text(ddg_query, max_results=max_results):
+                    ddg_results.append(r)
+            break  # If successful, break out of the retry loop
+
+        except Exception as e:
+            if "Ratelimit" in str(e):
+                retries += 1
+                if retries > max_retries:
+                    print("Max retries reached.  DuckDuckGo search failed.")
+                    break  # Give up after max retries
+                else:
+                    # Exponential backoff with jitter
+                    sleep_time = delay * (2 ** (retries - 1)) + random.uniform(0, 1)  # Add jitter
+                    print(f"Rate limit encountered. Retrying in {sleep_time:.2f} seconds...")
+                    time.sleep(sleep_time)
+                    delay = initial_delay # Reset the initial delay after the exception.
+            else:
+                print(f"An unexpected error occurred during DuckDuckGo search: {e}")
+                break  # Break out of the loop for non-rate limit errors
+
+    # Extract Archive.org identifiers from DuckDuckGo results
+    ddg_identifiers = []
+    for result in ddg_results:
+        url = result['href']
+        if "archive.org/details/" in url:
+            identifier = url.split("details/")[1].split("/")[0]  # Extract identifier
+            ddg_identifiers.append(identifier)
+        elif "archive.org/download/" in url:  # Handle download URLs
+            identifier = url.split("download/")[1].split("/")[0]
+            ddg_identifiers.append(identifier)
+
+    #3. Fetch item details from Archive.org based on DDG identifiers
+    ddg_results_enriched = []
+    for identifier in ddg_identifiers:
+        try:
+            item = internetarchive.get_item(identifier)
+            item_details = {
+                'identifier': identifier,
+                'title': item.metadata.get('title', identifier),  # Use identifier if title missing
+                'creator': item.metadata.get('creator', ''),
+                'image': f"https://archive.org/services/img/{identifier}",  # Construct thumbnail URL
+                'source': 'duckduckgo'  # Add source field
+            }
+            ddg_results_enriched.append(item_details)
+        except Exception as e:
+            print(f"Error fetching item details for {identifier}: {e}")
+
+    # 4. Combine and Deduplicate Results
+    all_results = ia_results + ddg_results_enriched
+    unique_identifiers = set()
+    combined_results = []
+
+    for result in all_results:
+        identifier = result['identifier']
+        if identifier not in unique_identifiers:
+            combined_results.append(result)
+            unique_identifiers.add(identifier)
+
+    return combined_results
+
 # --- Streamlit UI ---
 st.title("Archive.org Search")
-
 # Initialize session state
 if 'musicbrainz_results' not in st.session_state:
     st.session_state.musicbrainz_results = []
@@ -222,7 +295,6 @@ if 'audible_results' not in st.session_state:
     st.session_state.audible_results = []
 if 'search_term_input' not in st.session_state:
     st.session_state.search_term_input = ""
-
 # Dynamically load tools from the 'tools' directory ONCE
 tools_dir = "tools"
 tool_modules = []
@@ -235,7 +307,6 @@ if os.path.exists(tools_dir) and os.path.isdir(tools_dir):
             logging.info(f"Loaded tool module: {tool_file}")
         except Exception as e:
             st.error(f"Error loading tool {tool_file}: {e}")
-
 # Sidebar for Tools
 with st.sidebar:
     st.header("Tools")
@@ -245,7 +316,6 @@ with st.sidebar:
             module.album_search_tool(retry_with_backoff)
         if hasattr(module, 'audible_search_tool'):
             module.audible_search_tool(retry_with_backoff)
-
 # Main Search Section
 if st.session_state.get("selected_album"):
     search_term = f"{st.session_state.selected_album['artist']} {st.session_state.selected_album['title']}"
@@ -255,7 +325,6 @@ elif st.session_state.get("selected_book"):
     st.write(f"Searching for: '{search_term}'")  # Display search term
 else:
     search_term = st.text_input("Enter Search Term:", key="search_term_input", value=st.session_state.get("search_term_input", ""))
-
 # Media Type Selection
 media_type = st.radio(
     "Select Media Type:",
@@ -270,7 +339,6 @@ media_type_mapping = {
     "movies": "movies"
 }
 selected_media_type = media_type_mapping[media_type]
-
 # File Type Filter (Dropdown)
 with st.expander("Filter by File Type", expanded=False):
     file_type_options = ["", "mp3", "flac", "pdf", "wav", "ogg", "zip"]  # Add more options as needed
@@ -279,7 +347,6 @@ with st.expander("Filter by File Type", expanded=False):
         options=file_type_options,
         key="file_types_select"
     )
-
 # Year Filter (Simplified)
 with st.expander("Year Filter", expanded=False):
     start_year_str = st.text_input("Year (Optional):", key="start_year_input", value="")
@@ -296,30 +363,26 @@ with st.expander("Year Filter", expanded=False):
                 start_year = int(start_year_str)
             except ValueError:
                 st.error("Invalid year format. Please enter a number.")
-
 # Clear Search Button
 if st.button("Clear Search", key="clear_search_button"):
     for key in st.session_state.keys():
         del st.session_state[key]
     st.rerun()
-
 # Trigger Search Logic (Simplified)
 perform_search = False
 if st.session_state.get("selected_album") or search_term:
     perform_search = True
-
 if perform_search:
     if st.session_state.get("selected_album"):
         search_term_to_use = f"{st.session_state.selected_album['artist']} {st.session_state.selected_album['title']}"
     else:
         search_term_to_use = search_term
-
     with st.spinner(f"Searching Archive.org for '{search_term_to_use}'..."):
         start_year_to_use = None
         if st.session_state.use_album_year and st.session_state.get("selected_album"):
             start_year_to_use = st.session_state.selected_album['year']
-
-        results = search_archive(search_term_to_use, selected_media_type, start_year=start_year_to_use)
+        # Use the cached combined search function
+        results = cached_search_archive_with_duckduckgo(search_term_to_use, selected_media_type, start_year=start_year_to_use)
         filtered_results = filter_results_by_file_types(results,
                                                           file_types_filter) if file_types_filter else results
         st.session_state.results = results
@@ -327,7 +390,6 @@ if perform_search:
 else:
     if 'results' not in st.session_state:
         st.session_state.results = None
-
 # Display the details panel _above_ the search results
 if st.session_state.selected_result_identifier:
     selected_result = next((result for result in st.session_state.get("filtered_results", []) + st.session_state.get("musicbrainz_results", [])
@@ -337,7 +399,6 @@ if st.session_state.selected_result_identifier:
     else:
         st.error("Selected result not found.")
         st.session_state.selected_result_identifier = None
-
 # Display results in a grid
 if st.session_state.results:
     num_columns = 5
@@ -367,11 +428,11 @@ if st.session_state.results:
                         )
                     else:
                         st.write("Download not available.")
-                    st.caption(result['title'])
+                    st.caption(f"{result['title']} (Source: {result['source']})") # ADDED SOURCE
                 except:
-                    st.write(result['title'])
+                    st.write(f"{result['title']} (Source: {result['source']})") # ADDED SOURCE
             else:
-                st.write(result['title'])
+                st.write(f"{result['title']} (Source: {result['source']})") # ADDED SOURCE
             # Add a Streamlit button with a unique key
             if st.button("Details", key=f"details_button_{result['identifier']}"):
                 st.session_state.selected_result_identifier = result['identifier']
