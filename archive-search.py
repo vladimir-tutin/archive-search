@@ -196,21 +196,29 @@ def display_result_details(result):
                         st.session_state.selected_track_index = index
                         st.rerun()  # Force a rerun to update the player
 
-                    # Display track list with buttons to play each track
-                    for i, name in enumerate(audio_names):
-                        if st.button(f"Play: {name}", key=f"play_button_{result['identifier']}_{i}"):
-                            play_track(i)
+                    # Display track list within an expander
+                    with st.expander("Music Queue", expanded=False):
+                        for i, name in enumerate(audio_names):
+                            if st.button(f"Play: {name}", key=f"play_button_{result['identifier']}_{i}"):
+                                play_track(i)
 
                     # Generate the audio player HTML with the selected track
                     selected_track_index = st.session_state.selected_track_index
                     selected_audio_url = audio_urls[selected_track_index]
-                    playlist_html = f"""
-                        <audio controls autoplay>
-                            <source src="{selected_audio_url}" type="audio/{selected_audio_url.split(".")[-1]}">
-                            Your browser does not support the audio element.
-                        </audio>
-                    """
-                    st.components.v1.html(playlist_html, height=100)
+                    try:
+                        response = requests.head(selected_audio_url, allow_redirects=True)
+                        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+                        playlist_html = f"""
+                            <div style="background-color: transparent;">
+                                <audio controls autoplay style="width: 100%;">
+                                    <source src="{selected_audio_url}" type="audio/{selected_audio_url.split(".")[-1]}">
+                                    Your browser does not support the audio element.
+                                </audio>
+                            </div>
+                        """
+                        st.components.v1.html(playlist_html, height=50)
+                    except requests.exceptions.RequestException as e:
+                        st.error(f"Error loading audio: {e}")
 
                 st.subheader("Files:")
                 file_names = [file['name'] for file in files]
