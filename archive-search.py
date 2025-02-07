@@ -494,3 +494,4 @@ if st.session_state.results:
             if st.button(f"Show Details", key=button_key):
                 st.session_state.selected_result_identifier = result['identifier']
                 st.rerun()  # Force a rerun here
+            
