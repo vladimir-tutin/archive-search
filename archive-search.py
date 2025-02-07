@@ -234,21 +234,23 @@ if album_search_button and album_title and artist_name:
         musicbrainz_results, musicbrainz_error = search_musicbrainz_album(album_title, artist_name)
         if musicbrainz_error:
             st.error(musicbrainz_error)
+    st.session_state.musicbrainz_results = musicbrainz_results  # Store results in session state
+else:
+    st.session_state.musicbrainz_results = []
 
 # Display MusicBrainz Results
 selected_album = None
-if musicbrainz_results:
+if st.session_state.get("musicbrainz_results"):
     st.subheader("MusicBrainz Results")
-    album_options = [f"{result['artist']} - {result['title']} ({result['year']})" for result in musicbrainz_results if result['year']]
+    album_options = [f"{result['artist']} - {result['title']} ({result['year']})" for result in st.session_state.musicbrainz_results if result['year']]
     selected_album_display = st.selectbox("Select an album:", album_options, key="musicbrainz_album_select")
 
     # Find the selected album
-    selected_album = next((result for result in musicbrainz_results
+    selected_album = next((result for result in st.session_state.musicbrainz_results
                            if f"{result['artist']} - {result['title']} ({result['year']})" == selected_album_display), None)
-    if selected_album:
-        st.session_state.selected_album = selected_album  # Store selected album in session state
+    st.session_state.selected_album = selected_album  # Store selected album in session state
 else:
-    st.session_state.selected_album = None  # Clear stored album if no results
+    st.session_state.selected_album = None
 
 # Main Search Section
 st.subheader("Archive.org Search")
