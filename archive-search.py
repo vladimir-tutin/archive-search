@@ -275,6 +275,7 @@ if st.session_state.results:
             button_key = f"details_{i}"
             if st.button(f"Show Details", key=button_key):
                 st.session_state.selected_result_identifier = result['identifier']  # Store the identifier
+                st.rerun() # Rerun to show the popup
 
     # Popup Panel Logic
     if st.session_state.get("selected_result_identifier"):
@@ -319,29 +320,37 @@ if st.session_state.results:
             # Create the popup content
             with st.container():  # Use a container to group elements
                 st.markdown('<div class="popup">', unsafe_allow_html=True)
-                display_result_details(selected_result)  # Display the result details
+                with st.container(): # Container for the details and close button
+                    display_result_details(selected_result)  # Display the result details
 
-                # Close button
-                if st.button("Close"):
-                    st.session_state.selected_result_identifier = None  # Clear the selection
-                    st.rerun()  # Force a rerun to remove the popup
-
+                    # Close button
+                    if st.button("Close", key="close_button"): # Unique key for the close button
+                        st.session_state.selected_result_identifier = None  # Clear the selection
+                        st.rerun()  # Force a rerun to remove the popup
                 st.markdown('</div>', unsafe_allow_html=True) # close the popup div
 
             # Add JavaScript to close the popup on outside click
             st.components.v1.html(
-                """
+                f"""
                 <script>
                 const overlay = document.querySelector('.overlay');
                 if (overlay) {
-                    overlay.addEventListener('click', function() {
-                        Streamlit.setComponentValue(null) // Or any other value to trigger a rerun
-                    });
-                }
+                    overlay.addEventListener('click', function(event) {{
+                        if (event.target === overlay) {{
+                            Streamlit.setComponentValue('{st.session_state.selected_result_identifier}') // Send the identifier so we know which popup to close
+                        }}
+                    }});
+                }}
                 </script>
                 """,
                 height=0,
             )
+
+            # Handle the JavaScript callback
+            component_value = st.session_state.get("component_value", None)
+            if component_value == st.session_state.selected_result_identifier: # Check if the identifier matches the current popup
+                st.session_state.selected_result_identifier = None
+                st.rerun()
         else:
             st.error("Selected result not found.")
             st.session_state.selected_result_identifier = None  # Clear the selection
