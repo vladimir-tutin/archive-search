@@ -9,11 +9,8 @@ import re
 from datetime import date
 import musicbrainzngs
 import random
-
 # Configure MusicBrainz
-musicbrainzngs.set_useragent("ArchiveOrgSearch", "1.0", "your_email@example.com")  # Replace with your email
-
-
+musicbrainzngs.set_useragent("ArchiveOrgSearch", "1.0", "your_email@example.com") # Replace with your email
 def search_musicbrainz_album(album_title=None, artist_name=None, retry_count=0, max_retries=3):
     """Searches MusicBrainz for albums (release groups) with retry logic, handling missing artist/album."""
     try:
@@ -61,8 +58,6 @@ def search_musicbrainz_album(album_title=None, artist_name=None, retry_count=0, 
             return [], "MusicBrainz network error after multiple retries."
     except Exception as e:
         return [], f"Error searching MusicBrainz: {e}"
-
-
 def search_archive(search_term, media_type, start_year=None, start_month=None, start_day=None, end_year=None,
                    end_month=None, end_day=None):
     """
@@ -113,8 +108,6 @@ def search_archive(search_term, media_type, start_year=None, start_month=None, s
     except Exception as e:
         print(f"Error during search: {e}")
         return []
-
-
 def get_item_files(identifier):
     """Retrieves the files associated with an item on archive.org."""
     try:
@@ -125,8 +118,6 @@ def get_item_files(identifier):
     except Exception as e:
         print(f"Error retrieving item files: {e}")
         return []
-
-
 def filter_results_by_file_types(results, file_types_str):
     """Filters search results to only include items that contain files of the specified types."""
     if not file_types_str:
@@ -140,8 +131,6 @@ def filter_results_by_file_types(results, file_types_str):
             if any(file['name'].lower().endswith(f".{file_type}") for file in files for file_type in file_types):
                 filtered_results.append(result)
     return filtered_results
-
-
 def download_file(url, filename):
     """Downloads a file from the given URL and returns it as bytes."""
     try:
@@ -151,24 +140,18 @@ def download_file(url, filename):
     except requests.exceptions.RequestException as e:
         st.error(f"Error downloading file: {e}")
         return None
-
-
 def display_text_preview(result, files):
     """Displays a text preview section with a dropdown to select text-based files."""
     text_extensions = ['.txt', '.epub', '.html', '.htm', '.md']  # Add more as needed
     text_files = [file for file in files if any(file['name'].lower().endswith(ext) for ext in text_extensions)]
-
     if text_files:
         st.subheader("Text Preview")
         text_names = [file['name'] for file in text_files]
-
         # Session state key for the selected text file
         selected_text_key = f"selected_text_{result['identifier']}"
-
         # Initialize selected text file in session state if it doesn't exist
         if selected_text_key not in st.session_state:
             st.session_state[selected_text_key] = text_names[0] if text_names else None  # Select the first by default
-
         # Dropdown to select the text file
         selected_text_name = st.selectbox(
             "Select Text File:",
@@ -179,25 +162,19 @@ def display_text_preview(result, files):
             # Set index to currently selected text file
         )
         st.session_state[selected_text_key] = selected_text_name
-
         # Get the selected text file URL
         selected_text_url = f"https://archive.org/download/{result['identifier']}/{selected_text_name}" if selected_text_name else None
-
         if selected_text_url:
             try:
                 response = requests.get(selected_text_url)
                 response.raise_for_status()  # Raise HTTPError for bad responses
                 text_content = response.text
-
                 # Basic text display (you might want to add formatting for HTML/EPUB)
                 st.markdown(f"<div style='height:400px; overflow-y:scroll; border: 1px solid #ccc; padding: 10px;'>{text_content}</div>", unsafe_allow_html=True)
-
             except requests.exceptions.RequestException as e:
                 st.error(f"Error loading text file: {e}")
             except Exception as e:
                 st.error(f"Error processing text file: {e}")
-
-
 def display_pdf_preview(result, files):
     """Displays a PDF preview section with a dropdown to select PDF files."""
     pdf_files = [file for file in files if file['name'].lower().endswith('.pdf')]
@@ -229,8 +206,6 @@ def display_pdf_preview(result, files):
                     unsafe_allow_html=True)
             except Exception as e:
                 st.error(f"Error displaying PDF: {e}")
-
-
 def display_result_details(result, media_type):
     """Displays the details of a selected result, including an audio player with queue and file selection."""
     st.subheader(result['title'])
@@ -304,7 +279,6 @@ def display_result_details(result, media_type):
                 elif media_type == "texts":
                     display_pdf_preview(result, files)
                     display_text_preview(result, files)
-
     # File section below the image and audio
     st.subheader("Files:")
     file_names = [file['name'] for file in files]
@@ -325,8 +299,6 @@ def display_result_details(result, media_type):
                 )
             else:
                 st.warning("No files found for this item.")
-
-
 def get_thumbnail_url(identifier):
     """Retrieves the URL of the thumbnail image for a given item identifier."""
     try:
@@ -334,8 +306,6 @@ def get_thumbnail_url(identifier):
     except Exception as e:
         print(f"Error getting thumbnail URL: {e}")
         return None
-
-
 def get_zip_download_url(identifier):
     """Constructs the zip download URL for an item from archive.org."""
     try:
@@ -343,8 +313,25 @@ def get_zip_download_url(identifier):
     except Exception as e:
         print(f"Error getting ZIP download URL for {identifier}: {e}")
         return None
-
-
+def has_restricted_download(identifier):
+    """
+    Checks if an item has a restricted download by attempting to access the zip download URL.
+    Returns True if the download is restricted (status code 403), False otherwise.
+    """
+    zip_url = get_zip_download_url(identifier)
+    if zip_url:
+        try:
+            response = requests.head(zip_url, allow_redirects=True)
+            response.raise_for_status()  # Raise HTTPError for bad responses
+            if response.status_code == 403:  # Forbidden status code indicates restricted download
+                return True
+            else:
+                return False
+        except requests.exceptions.RequestException as e:
+            print(f"Error checking download restriction for {identifier}: {e}")
+            return True  # Assume restricted if there's an error during the check
+    else:
+        return True  # Assume restricted if zip URL cannot be constructed
 # Streamlit UI
 st.title("Archive.org Search")
 # Album Search Section in an expander
@@ -446,11 +433,12 @@ if search_term or search_button_pressed:
                 results = search_archive(search_term, selected_media_type, start_year=start_year,
                                          start_month=start_month, start_day=start_day, end_year=end_year,
                                          end_month=end_month, end_day=end_day)
-                st.session_state.results = results
+                # Filter out results with restricted downloads
+                filtered_results = [result for result in results if not has_restricted_download(result['identifier'])]
+                st.session_state.results = filtered_results
                 # Handle single file type filtering
-                filtered_results = results
                 if file_types_filter:
-                    filtered_results = filter_results_by_file_types(results, file_types_filter)
+                    filtered_results = filter_results_by_file_types(filtered_results, file_types_filter)
                 st.session_state.filtered_results = filtered_results
             except Exception as e:
                 st.error(f"An error occurred: {e}")
@@ -471,7 +459,8 @@ if st.session_state.get("selected_result_identifier"):
 if st.session_state.results:
     num_columns = 5
     cols = st.columns(num_columns)
-    for i, result in enumerate(st.session_state.results):
+    results_to_display = st.session_state.get("filtered_results", st.session_state.results)
+    for i, result in enumerate(results_to_display):
         with cols[i % num_columns]:
             thumbnail_url = get_thumbnail_url(result['identifier'])
             if thumbnail_url:
