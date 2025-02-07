@@ -189,21 +189,21 @@ def display_result_details(result):
                     audio_names = [file['name'] for file in audio_files]
 
                     # Create a playlist using session state to manage selected track
-                    if 'selected_track_index' not in st.session_state:
-                        st.session_state.selected_track_index = 0
+                    if f'selected_track_index_{result["identifier"]}' not in st.session_state:
+                        st.session_state[f'selected_track_index_{result["identifier"]}'] = 0
 
-                    def play_track(index):
-                        st.session_state.selected_track_index = index
+                    def play_track(index, identifier):
+                        st.session_state[f'selected_track_index_{identifier}'] = index
                         st.rerun()  # Force a rerun to update the player
 
                     # Display track list within an expander
-                    with st.expander("Music Queue", expanded=False):
+                    with st.expander("Music Queue", expanded=False, key=f"music_queue_expander_{result['identifier']}"):
                         for i, name in enumerate(audio_names):
                             if st.button(f"Play: {name}", key=f"play_button_{result['identifier']}_{i}"):
-                                play_track(i)
+                                play_track(i, result['identifier'])
 
                     # Generate the audio player HTML with the selected track
-                    selected_track_index = st.session_state.selected_track_index
+                    selected_track_index = st.session_state[f'selected_track_index_{result["identifier"]}']
                     selected_audio_url = audio_urls[selected_track_index]
                     try:
                         response = requests.head(selected_audio_url, allow_redirects=True)
