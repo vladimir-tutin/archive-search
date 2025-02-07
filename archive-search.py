@@ -8,14 +8,18 @@ import base64
 import re
 from datetime import date
 
-def search_archive(search_term, media_type, start_date=None, end_date=None):
+def search_archive(search_term, media_type, start_year=None, start_month=None, start_day=None, end_year=None, end_month=None, end_day=None):
     """
-    Searches archive.org for audiobooks or ebooks, with optional date range filtering.
+    Searches archive.org for audiobooks or ebooks, with optional date range filtering using year/month/day.
     Args:
         search_term (str): The term to search for.
         media_type (str): The media type to search for.
-        start_date (date, optional): The start date for the search. Defaults to None.
-        end_date (date, optional): The end date for the search. Defaults to None.
+        start_year (int, optional): The start year for the search. Defaults to None.
+        start_month (int, optional): The start month for the search. Defaults to None.
+        start_day (int, optional): The start day for the search. Defaults to None.
+        end_year (int, optional): The end year for the search. Defaults to None.
+        end_month (int, optional): The end month for the search. Defaults to None.
+        end_day (int, optional): The end day for the search. Defaults to None.
     Returns:
         list: A list of dictionaries, where each dictionary represents a search result.
               Returns an empty list if no results are found or an error occurs.
@@ -23,6 +27,23 @@ def search_archive(search_term, media_type, start_date=None, end_date=None):
     try:
         ia = internetarchive.ArchiveSession()
         query = f'({search_term}) AND mediatype:{media_type}'
+
+        start_date = None
+        end_date = None
+
+        if start_year and start_month and start_day:
+            try:
+                start_date = date(start_year, start_month, start_day)
+            except ValueError:
+                st.error("Invalid start date.")
+                return []
+
+        if end_year and end_month and end_day:
+            try:
+                end_date = date(end_year, end_month, end_day)
+            except ValueError:
+                st.error("Invalid end date.")
+                return []
 
         # Add date range filter if start and end dates are provided
         if start_date and end_date:
@@ -89,11 +110,8 @@ def display_result_details(result):
     st.write(f"**Identifier:** {result['identifier']}")
     item_url = f"https://archive.org/details/{result['identifier']}"
     st.markdown(f"[View on Archive.org]({item_url})")
-
     thumbnail_url = get_thumbnail_url(result['identifier'])
-
     col1, col2 = st.columns([1, 2])
-
     with col1:
         st.markdown(
             f"""
@@ -105,7 +123,6 @@ def display_result_details(result):
             st.image(thumbnail_url, caption=f"Image for {result['title']}", width=300)
         else:
             st.write("No image available.")
-
     with col2:
         with st.spinner(f"Retrieving files for '{result['title']}'..."):
             files = get_item_files(result['identifier'])
@@ -121,16 +138,13 @@ def display_result_details(result):
                         </audio>
                     """
                     st.components.v1.html(playlist_html, height=100)
-
                 st.subheader("Files:")
                 file_names = [file['name'] for file in files]
                 selected_file = st.selectbox("Select a file to download:", file_names,
                                               key=f"file_select_{result['identifier']}")
-
                 if selected_file:
                     selected_file_data = next((file for file in files if file['name'] == selected_file), None)
                     download_url = f"https://archive.org/download/{result['identifier']}/{selected_file_data['name']}"
-
                     with st.spinner(f"Downloading '{selected_file}'..."):
                         file_bytes = download_file(download_url, selected_file)
                         if file_bytes:
@@ -173,6 +187,7 @@ media_type = st.radio(
     key="media_type_radio",
     horizontal=True
 )
+
 media_type_mapping = {
     "audio": "audio",
     "texts": "texts",
@@ -185,14 +200,27 @@ selected_media_type = media_type_mapping[media_type]
 file_types_filter = st.text_input("Filter by File Types (space-separated, e.g., mp3 flac pdf):",
                                    key="file_types_input")
 
-# Date Range Filter
-default_start_date = date(1990, 1, 1)
-default_end_date = date.today()
-
-# Use an expander to keep the UI clean
+# Date Range Filter using dropdowns
 with st.expander("Date Range Filter", expanded=False):
-    start_date = st.date_input("Start Date", value=default_start_date, key="start_date")
-    end_date = st.date_input("End Date", value=default_end_date, key="end_date")
+    current_year = date.today().year
+    year_options = list(range(1900, current_year + 1)) # Extend year range
+    month_options = list(range(1, 13))
+    day_options = list(range(1, 32))
+
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+
+    with col1:
+        start_year = st.selectbox("Start Year", year_options, index=0, key="start_year") #index 0 shows the first year
+    with col2:
+        start_month = st.selectbox("Start Month", month_options, index=0, key="start_month")
+    with col3:
+        start_day = st.selectbox("Start Day", day_options, index=0, key="start_day")
+    with col4:
+        end_year = st.selectbox("End Year", year_options, index=len(year_options)-1, key="end_year") #index len(year_options)-1 shows the last year
+    with col5:
+        end_month = st.selectbox("End Month", month_options, index=len(month_options)-1, key="end_month")
+    with col6:
+        end_day = st.selectbox("End Day", day_options,  index=len(day_options)-1, key="end_day")
 
 # Search Button
 search_button_pressed = st.button("Search", key="search_button")
@@ -204,7 +232,7 @@ if search_term or search_button_pressed:
     else:
         with st.spinner(f"Searching Archive.org for '{search_term}'..."):
             try:
-                results = search_archive(search_term, selected_media_type, start_date, end_date)
+                results = search_archive(search_term, selected_media_type, start_year, start_month, start_day, end_year, end_month, end_day)
                 filtered_results = filter_results_by_file_types(results, file_types_filter)
                 st.session_state.results = filtered_results
 
@@ -245,6 +273,7 @@ if st.session_state.results:
                     response.raise_for_status()
                     image = Image.open(io.BytesIO(response.content))
                     zip_download_url = get_zip_download_url(result['identifier'])
+
                     if zip_download_url:
                         st.markdown(
                             f"""
@@ -266,6 +295,7 @@ if st.session_state.results:
                     st.write(result['title'])
             else:
                 st.write(result['title'])
+
             button_key = f"details_{i}"
             if st.button(f"Show Details", key=button_key):
                 st.session_state.selected_result_identifier = result['identifier']
