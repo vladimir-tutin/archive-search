@@ -130,6 +130,16 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+def get_thumbnail_url(identifier):
+    """
+    Retrieves the URL of the thumbnail image for a given item identifier.
+    """
+    try:
+        return f"https://archive.org/services/img/{identifier}"
+    except Exception as e:
+        print(f"Error getting thumbnail URL: {e}")
+        return None
+
 # Modify the display_result_details function to return HTML
 def get_result_details_html(result):
     """Returns HTML content for the modal"""
@@ -209,16 +219,6 @@ if st.session_state.get('show_modal'):
     
     # Reset modal state after rendering
     st.session_state.show_modal = False
-    
-def get_thumbnail_url(identifier):
-    """
-    Retrieves the URL of the thumbnail image for a given item identifier.
-    """
-    try:
-        return f"https://archive.org/services/img/{identifier}"
-    except Exception as e:
-        print(f"Error getting thumbnail URL: {e}")
-        return None
 
 def get_zip_download_url(identifier):
     """
