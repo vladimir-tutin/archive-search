@@ -31,6 +31,7 @@ musicbrainzngs.set_useragent("ArchiveOrgSearch", "1.0", "your_email@example.com"
 
 
 # --- Helper Functions ---
+
 def handle_request_error(e, message="Request failed"):
     st.error(f"{message}: {e}")
 
@@ -232,7 +233,6 @@ def search_archive_with_duckduckgo(search_term, media_type, start_year=None, max
     Searches archive.org using DuckDuckGo and filters by media type.
     If ia_results are provided, it only searches DDG, excluding identifiers already in ia_results.
     """
-
     ddg_results_enriched = []  # Initialize outside the conditional
 
     # If ia_results are provided, skip the IA API search
@@ -263,7 +263,7 @@ def search_archive_with_duckduckgo(search_term, media_type, start_year=None, max
                         break  # Give up after max retries
                     else:
                         # Exponential backoff with jitter
-                        sleep_time = delay * (2 * (retries - 1)) + random.uniform(0, 1)  # Add jitter
+                        sleep_time = delay * (2 ** (retries - 1)) + random.uniform(0, 1)  # Add jitter
                         print(f"Rate limit encountered. Retrying in {sleep_time:.2f} seconds...")
                         time.sleep(sleep_time)
                         delay = initial_delay  # Reset the initial delay after the exception.
@@ -346,7 +346,6 @@ if 'search_term_input' not in st.session_state:
 if 'ia_results' not in st.session_state:
     st.session_state.ia_results = []
 
-
 # Dynamically load tools from the 'tools' directory ONCE
 tools_dir = "tools"
 tool_modules = []
@@ -372,47 +371,59 @@ with st.sidebar:
 
 
 # Function to display results.  Move this to a separate function.
-def display_results(results, displayed_identifiers):
+def display_results(results, displayed_identifiers, media_type):
     if results:
         num_columns = 5
         cols = st.columns(num_columns)
         for i, result in enumerate(results):
             identifier = result['identifier']
             if identifier not in displayed_identifiers:  # Skip if already displayed
-                with cols[i % num_columns]:
-                    thumbnail_url = get_thumbnail_url(identifier)
-                    zip_download_url = get_zip_download_url(identifier)
-                    if thumbnail_url:
-                        try:
-                            response = requests.get(thumbnail_url)
-                            response.raise_for_status()
-                            image = Image.open(io.BytesIO(response.content))
-                            if zip_download_url:
-                                st.markdown(
-                                    f"""
-                                    <div style="position: relative;">
-                                        <div style="height:200px; overflow: hidden;">
-                                            <img src="{thumbnail_url}" style="width: 100%; object-fit: contain;">
-                                        </div>
-                                        <div style="position: absolute; bottom: 5px; right: 5px;">
-                                            <a href="{zip_download_url}" download="{identifier}.zip" style="background-color: #4CAF50; border: none; color: white; padding: 5px 10px; text-align: center; text-decoration: none; display: inline-block; font-size: 10px; cursor: pointer; border-radius: 5px;">Download Zip</a>
-                                        </div>
-                                    </div>
-                                    """,
-                                    unsafe_allow_html=True
-                                )
+                # Retrieve the mediatype of the item to ensure it matches the selected media_type
+                try:
+                    item = internetarchive.get_item(identifier)
+                    item_metadata = item.metadata  # Get all metadata at once
+                    item_mediatype = item_metadata.get('mediatype')  # Get mediatype
+                    if item_mediatype and item_mediatype.lower() == media_type.lower():
+                        with cols[i % num_columns]:
+                            thumbnail_url = get_thumbnail_url(identifier)
+                            zip_download_url = get_zip_download_url(identifier)
+                            if thumbnail_url:
+                                try:
+                                    response = requests.get(thumbnail_url)
+                                    response.raise_for_status()
+                                    image = Image.open(io.BytesIO(response.content))
+                                    if zip_download_url:
+                                        st.markdown(
+                                            f"""
+                                            <div style="position: relative;">
+                                                <div style="height:200px; overflow: hidden;">
+                                                    <img src="{thumbnail_url}" style="width: 100%; object-fit: contain;">
+                                                </div>
+                                                <div style="position: absolute; bottom: 5px; right: 5px;">
+                                                    <a href="{zip_download_url}" download="{identifier}.zip" style="background-color: #4CAF50; border: none; color: white; padding: 5px 10px; text-align: center; text-decoration: none; display: inline-block; font-size: 10px; cursor: pointer; border-radius: 5px;">Download Zip</a>
+                                                </div>
+                                            </div>
+                                            """,
+                                            unsafe_allow_html=True
+                                        )
+                                    else:
+                                        st.write("Download not available.")
+                                    st.caption(f"{result['title']} (Source: {result['source']})")  # ADDED SOURCE
+                                except:
+                                    st.write(f"{result['title']} (Source: {result['source']})")  # ADDED SOURCE
                             else:
-                                st.write("Download not available.")
-                            st.caption(f"{result['title']} (Source: {result['source']})")  # ADDED SOURCE
-                        except:
-                            st.write(f"{result['title']} (Source: {result['source']})")  # ADDED SOURCE
+                                st.write(f"{result['title']} (Source: {result['source']})")  # ADDED SOURCE
+                            # Add a Streamlit button with a unique key
+                            if st.button("Details", key=f"details_button_{identifier}", on_click=set_selected_result,
+                                         args=(identifier,)):
+                                pass
+                        displayed_identifiers.add(identifier)  # Add to displayed identifiers
                     else:
-                        st.write(f"{result['title']} (Source: {result['source']})")  # ADDED SOURCE
-                    # Add a Streamlit button with a unique key
-                    if st.button("Details", key=f"details_button_{identifier}", on_click=set_selected_result,
-                                 args=(identifier,)):
-                        pass
-                displayed_identifiers.add(identifier)  # Add to displayed identifiers
+                        logging.info(
+                            f"Skipping {identifier} during display because mediatype {item_mediatype} != selected mediatype {media_type}")
+
+                except Exception as e:
+                    logging.error(f"Error retrieving mediatype during display: {e}")
 
 
 # Main Search Section
@@ -440,6 +451,7 @@ media_type_mapping = {
     "collections": "collection",
     "movies": "movies"
 }
+
 selected_media_type = media_type_mapping[media_type]
 
 # File Type Filter (Dropdown)
@@ -497,7 +509,7 @@ if perform_search:
             result['source'] = 'archive_api'  # Add source field
         st.session_state.ia_results = ia_results
         displayed_identifiers = set()  # Keep track of displayed identifiers
-        display_results(ia_results, displayed_identifiers)  # Display IA results immediately
+        display_results(ia_results, displayed_identifiers, selected_media_type)  # Display IA results immediately
         existing_identifiers = {result['identifier'] for result in ia_results}  # Store existing identifiers
 
     # Then, search DuckDuckGo (if there are IA results)
@@ -507,18 +519,17 @@ if perform_search:
                                                               start_year=start_year_to_use,
                                                               ia_results=st.session_state.ia_results,
                                                               existing_identifiers=existing_identifiers)
-
             filtered_results = filter_results_by_file_types(results,
                                                               file_types_filter) if file_types_filter else results
             st.session_state.results = results
             st.session_state.filtered_results = filtered_results
+
             # Display the combined results, skipping already displayed ones
-            display_results(results, displayed_identifiers)
+            display_results(results, displayed_identifiers, selected_media_type)
     else:
         st.info("No results from Archive.org, skipping DuckDuckGo search.")
         st.session_state.results = ia_results  # Use IA results if DDG is skipped
         st.session_state.filtered_results = ia_results
-
 else:
     if 'results' not in st.session_state:
         st.session_state.results = None
