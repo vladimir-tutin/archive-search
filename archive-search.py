@@ -15,23 +15,27 @@ if not DISCOGS_TOKEN:
     st.warning("Please add your Discogs token to Streamlit secrets as DISCOGS_TOKEN.")
 
 def search_discogs_album(album_title, artist_name):
-    """Searches Discogs for an album and returns release year and other data."""
+    """Searches Discogs for albums and returns a list of possible results."""
     if not DISCOGS_TOKEN:
-        return None, None, "Discogs token not configured."
+        return [], "Discogs token not configured."
 
     try:
         d = discogs_client.Client('ArchiveOrgSearch/1.0', user_token=DISCOGS_TOKEN)
         results = d.search(f"{artist_name} - {album_title}", type='release')
         if results:
-            first_result = results[0]  # Take the first result
-            release_year = first_result.year
-            artist = first_result.artists[0].name if first_result.artists else "Unknown Artist"  # Get artist from result
-
-            return release_year, artist, None  # Return release year, artist, and no error
+            album_results = []
+            for result in results:
+                album_results.append({
+                    'artist': result.artists[0].name if result.artists else "Unknown Artist",
+                    'title': result.title,
+                    'year': result.year,
+                    'discogs_id': result.id
+                })
+            return album_results, None
         else:
-            return None, None, "No album found on Discogs."
+            return [], "No album found on Discogs."
     except Exception as e:
-        return None, None, f"Error searching Discogs: {e}"
+        return [], f"Error searching Discogs: {e}"
 
 
 def search_archive(search_term, media_type, start_year=None, start_month=None, start_day=None, end_year=None, end_month=None, end_day=None):
@@ -211,24 +215,31 @@ artist_name = st.text_input("Enter Artist Name:", key="artist_name_input")
 
 album_search_button = st.button("Search Album (Discogs)", key="album_search_button")
 
-release_year = None  # Initialize release_year
+discogs_results = []
 if album_search_button and album_title and artist_name:
     with st.spinner(f"Searching Discogs for '{album_title}' by '{artist_name}'..."):
-        release_year, discogs_artist, discogs_error = search_discogs_album(album_title, artist_name)
+        discogs_results, discogs_error = search_discogs_album(album_title, artist_name)
         if discogs_error:
             st.error(discogs_error)
-        elif release_year:
-            st.success(f"Album found! Release year: {release_year}")
-        else:
-            st.warning("Album not found on Discogs.")
+
+# Display Discogs Results
+selected_album = None
+if discogs_results:
+    st.subheader("Discogs Results")
+    album_options = [f"{result['artist']} - {result['title']} ({result['year']})" for result in discogs_results]
+    selected_album_display = st.selectbox("Select an album:", album_options, key="discogs_album_select")
+
+    # Find the selected album
+    selected_album = next((result for result in discogs_results
+                           if f"{result['artist']} - {result['title']} ({result['year']})" == selected_album_display), None)
 
 # Main Search Section
 st.subheader("Archive.org Search")
 
-# Search Term Input (Adjusted)
-if release_year and album_title and artist_name:
-    search_term = f"{artist_name} {album_title}"  # Use artist and album title
-    st.write(f"Searching Archive.org for: '{search_term}' released in {release_year}")  # Display search term
+# Search Term Input (Prefilled)
+if selected_album:
+    search_term = f"{selected_album['artist']} {selected_album['title']}"
+    st.write(f"Searching Archive.org for: '{search_term}'")  # Display search term
 else:
     search_term = st.text_input("Enter Search Term:", key="search_term_input", on_change=None)
 
@@ -252,25 +263,28 @@ selected_media_type = media_type_mapping[media_type]
 file_types_filter = st.text_input("Filter by File Types (space-separated, e.g., mp3 flac pdf):",
                                    key="file_types_input")
 
-
-# Date Range Filter  (Simplified)
+# Date Range Filter (Simplified)
 with st.expander("Date Range Filter", expanded=False):
-    use_album_year = st.checkbox("Use Album Release Year", value=bool(release_year), disabled=not release_year)  # Checkbox to use album year
+    use_album_year = False
+    start_year = None  # Initialize start_year
 
-    if use_album_year and release_year:
-        start_year = release_year
-        st.write(f"Using album release year: {release_year}")
+    if selected_album:
+        use_album_year = st.checkbox("Use Album Release Year", value=True)  # Checked by default
+
+    if use_album_year and selected_album:
+        start_year = selected_album['year']
+        st.write(f"Using album release year: {start_year}")
     else:
         current_year = date.today().year
-        year_options = list(range(1900, current_year + 1))  # Extend year range
-        start_year = st.selectbox("Year", year_options, index=len(year_options) - 1, key="start_year")  # Default to current year
+        year_options = list(range(1900, current_year + 1))
+        start_year = st.selectbox("Year", year_options, index=len(year_options) - 1, key="start_year")
+
     # Disable month and day selection when using album release year
     start_month = None
     start_day = None
     end_year = None
     end_month = None
     end_day = None
-
 
 # Search Button
 search_button_pressed = st.button("Search Archive.org", key="search_button")
