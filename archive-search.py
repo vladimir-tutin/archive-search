@@ -107,7 +107,7 @@ def display_result_details(result):
     # Thumbnail URL
     thumbnail_url = get_thumbnail_url(result['identifier'])
 
-    col1, col2 = st.columns([1, 2])  # Adjust the ratio as needed
+    col1, col2 = st.columns([1, 2], gap="medium")  # Adjust the ratio as needed.  Added gap.
 
     with col1:
         if thumbnail_url:
