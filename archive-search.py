@@ -8,6 +8,7 @@ import base64
 import re
 from datetime import date
 import discogs_client
+import json
 
 # Configure Discogs API client
 DISCOGS_TOKEN = st.secrets.get("DISCOGS_TOKEN")  # Store your Discogs token in Streamlit secrets
@@ -25,12 +26,17 @@ def search_discogs_album(album_title, artist_name):
         if results:
             album_results = []
             for result in results:
-                album_results.append({
-                    'artist': result.artists[0].name if result.artists else "Unknown Artist",
-                    'title': result.title,
-                    'year': result.year,
-                    'discogs_id': result.id
-                })
+                try:
+                    album_results.append({
+                        'artist': result.artists[0].name if result.artists else "Unknown Artist",
+                        'title': result.title,
+                        'year': result.year,
+                        'discogs_id': result.id
+                    })
+                except Exception as e:
+                    print(f"Error processing a Discogs result: {e}")
+                    continue  # Skip this result and continue with the next
+
             return album_results, None
         else:
             return [], "No album found on Discogs."
