@@ -166,6 +166,8 @@ def display_result_details(result):
     item_url = f"https://archive.org/details/{result['identifier']}"
     st.markdown(f"[View on Archive.org]({item_url})")
     thumbnail_url = get_thumbnail_url(result['identifier'])
+
+    # Use columns for the image and audio section
     col1, col2 = st.columns([1, 2])
     with col1:
         st.markdown(
@@ -175,9 +177,10 @@ def display_result_details(result):
             unsafe_allow_html=True
         )
         if thumbnail_url:
-            st.image(thumbnail_url, caption=f"Image for {result['title']}", width=200)
+            st.image(thumbnail_url, caption=f"Image for {result['title']}", width=220)
         else:
             st.write("No image available.")
+
     with col2:
         with st.spinner(f"Retrieving files for '{result['title']}'..."):
             files = get_item_files(result['identifier'])
@@ -215,7 +218,7 @@ def display_result_details(result):
                         response = requests.head(selected_audio_url, allow_redirects=True)
                         response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
                         playlist_html = f"""
-                            <div style="background-color: transparent;">
+                            <div style="background-color: transparent; width: 75%;">
                                 <audio controls autoplay style="width: 100%;">
                                     <source src="{selected_audio_url}" type="audio/{selected_audio_url.split(".")[-1]}">
                                     Your browser does not support the audio element.
@@ -226,23 +229,24 @@ def display_result_details(result):
                     except requests.exceptions.RequestException as e:
                         st.error(f"Error loading audio: {e}")
 
-                st.subheader("Files:")
-                file_names = [file['name'] for file in files]
-                selected_file = st.selectbox("Select a file to download:", file_names,
-                                              key=f"file_select_{result['identifier']}")
-                if selected_file:
-                    selected_file_data = next((file for file in files if file['name'] == selected_file), None)
-                    download_url = f"https://archive.org/download/{result['identifier']}/{selected_file_data['name']}"
-                    with st.spinner(f"Downloading '{selected_file}'..."):
-                        file_bytes = download_file(download_url, selected_file)
-                        if file_bytes:
-                            st.download_button(
-                                label=f"Download '{selected_file}'",
-                                data=file_bytes,
-                                file_name=selected_file,
-                                mime="application/octet-stream",
-                                key=f"download_button_{result['identifier']}_{selected_file}"
-                            )
+    # File section below the image and audio
+    st.subheader("Files:")
+    file_names = [file['name'] for file in files]
+    selected_file = st.selectbox("Select a file to download:", file_names,
+                                  key=f"file_select_{result['identifier']}")
+    if selected_file:
+        selected_file_data = next((file for file in files if file['name'] == selected_file), None)
+        download_url = f"https://archive.org/download/{result['identifier']}/{selected_file_data['name']}"
+        with st.spinner(f"Downloading '{selected_file}'..."):
+            file_bytes = download_file(download_url, selected_file)
+            if file_bytes:
+                st.download_button(
+                    label=f"Download '{selected_file}'",
+                    data=file_bytes,
+                    file_name=selected_file,
+                    mime="application/octet-stream",
+                    key=f"download_button_{result['identifier']}_{selected_file}"
+                )
             else:
                 st.warning("No files found for this item.")
 
@@ -390,8 +394,7 @@ if st.session_state.get("selected_result_identifier"):
                             if result['identifier'] == st.session_state.selected_result_identifier), None)
 
     if selected_result:
-        with st.container():
-            display_result_details(selected_result)
+        display_result_details(selected_result)
     else:
         st.error("Selected result not found.")
         st.session_state.selected_result_identifier = None
@@ -435,3 +438,6 @@ if st.session_state.results:
             button_key = f"details_{i}"
             if st.button(f"Show Details", key=button_key):
                 st.session_state.selected_result_identifier = result['identifier']
+                # Reset the queue visibility when a new result is selected
+                st.session_state[f"show_queue_{result['identifier']}"] = False
+                st.rerun()  #Force a rerun here
