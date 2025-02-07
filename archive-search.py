@@ -7,6 +7,32 @@ from PIL import Image
 import base64
 import re
 from datetime import date
+import discogs_client
+
+# Configure Discogs API client
+DISCOGS_TOKEN = st.secrets.get("DISCOGS_TOKEN")  # Store your Discogs token in Streamlit secrets
+if not DISCOGS_TOKEN:
+    st.warning("Please add your Discogs token to Streamlit secrets as DISCOGS_TOKEN.")
+
+def search_discogs_album(album_title, artist_name):
+    """Searches Discogs for an album and returns release year and other data."""
+    if not DISCOGS_TOKEN:
+        return None, None, "Discogs token not configured."
+
+    try:
+        d = discogs_client.Client('ArchiveOrgSearch/1.0', user_token=DISCOGS_TOKEN)
+        results = d.search(f"{artist_name} - {album_title}", type='release')
+        if results:
+            first_result = results[0]  # Take the first result
+            release_year = first_result.year
+            artist = first_result.artists[0].name if first_result.artists else "Unknown Artist"  # Get artist from result
+
+            return release_year, artist, None  # Return release year, artist, and no error
+        else:
+            return None, None, "No album found on Discogs."
+    except Exception as e:
+        return None, None, f"Error searching Discogs: {e}"
+
 
 def search_archive(search_term, media_type, start_year=None, start_month=None, start_day=None, end_year=None, end_month=None, end_day=None):
     """
@@ -31,18 +57,12 @@ def search_archive(search_term, media_type, start_year=None, start_month=None, s
         start_date = None
         end_date = None
 
-        if start_year and start_month and start_day:
+        if start_year:
             try:
-                start_date = date(start_year, start_month, start_day)
+                start_date = date(start_year, 1, 1)
+                end_date = date(start_year, 12, 31)
             except ValueError:
-                st.error("Invalid start date.")
-                return []
-
-        if end_year and end_month and end_day:
-            try:
-                end_date = date(end_year, end_month, end_day)
-            except ValueError:
-                st.error("Invalid end date.")
+                st.error("Invalid year.")
                 return []
 
         # Add date range filter if start and end dates are provided
@@ -67,6 +87,7 @@ def search_archive(search_term, media_type, start_year=None, start_month=None, s
         print(f"Error during search: {e}")
         return []
 
+
 def get_item_files(identifier):
     """Retrieves the files associated with an item on archive.org."""
     try:
@@ -77,6 +98,7 @@ def get_item_files(identifier):
     except Exception as e:
         print(f"Error retrieving item files: {e}")
         return []
+
 
 def filter_results_by_file_types(results, file_types_str):
     """Filters search results to only include items that contain files of the specified types."""
@@ -92,6 +114,7 @@ def filter_results_by_file_types(results, file_types_str):
                 filtered_results.append(result)
     return filtered_results
 
+
 def download_file(url, filename):
     """Downloads a file from the given URL and returns it as bytes."""
     try:
@@ -101,6 +124,7 @@ def download_file(url, filename):
     except requests.exceptions.RequestException as e:
         st.error(f"Error downloading file: {e}")
         return None
+
 
 def display_result_details(result):
     """Displays the details of a selected result, including an audio player if applicable."""
@@ -158,6 +182,7 @@ def display_result_details(result):
             else:
                 st.warning("No files found for this item.")
 
+
 def get_thumbnail_url(identifier):
     """Retrieves the URL of the thumbnail image for a given item identifier."""
     try:
@@ -165,6 +190,7 @@ def get_thumbnail_url(identifier):
     except Exception as e:
         print(f"Error getting thumbnail URL: {e}")
         return None
+
 
 def get_zip_download_url(identifier):
     """Constructs the zip download URL for an item from archive.org."""
@@ -174,11 +200,37 @@ def get_zip_download_url(identifier):
         print(f"Error getting ZIP download URL for {identifier}: {e}")
         return None
 
+
 # Streamlit UI
 st.title("Archive.org Search")
 
-# Search Term Input
-search_term = st.text_input("Enter Search Term:", key="search_term_input", on_change=None)
+# Album Search Section
+st.subheader("Album Search")
+album_title = st.text_input("Enter Album Title:", key="album_title_input")
+artist_name = st.text_input("Enter Artist Name:", key="artist_name_input")
+
+album_search_button = st.button("Search Album (Discogs)", key="album_search_button")
+
+release_year = None  # Initialize release_year
+if album_search_button and album_title and artist_name:
+    with st.spinner(f"Searching Discogs for '{album_title}' by '{artist_name}'..."):
+        release_year, discogs_artist, discogs_error = search_discogs_album(album_title, artist_name)
+        if discogs_error:
+            st.error(discogs_error)
+        elif release_year:
+            st.success(f"Album found! Release year: {release_year}")
+        else:
+            st.warning("Album not found on Discogs.")
+
+# Main Search Section
+st.subheader("Archive.org Search")
+
+# Search Term Input (Adjusted)
+if release_year and album_title and artist_name:
+    search_term = f"{artist_name} {album_title}"  # Use artist and album title
+    st.write(f"Searching Archive.org for: '{search_term}' released in {release_year}")  # Display search term
+else:
+    search_term = st.text_input("Enter Search Term:", key="search_term_input", on_change=None)
 
 # Media Type Selection
 media_type = st.radio(
@@ -200,30 +252,28 @@ selected_media_type = media_type_mapping[media_type]
 file_types_filter = st.text_input("Filter by File Types (space-separated, e.g., mp3 flac pdf):",
                                    key="file_types_input")
 
-# Date Range Filter using dropdowns
+
+# Date Range Filter  (Simplified)
 with st.expander("Date Range Filter", expanded=False):
-    current_year = date.today().year
-    year_options = list(range(1900, current_year + 1)) # Extend year range
-    month_options = list(range(1, 13))
-    day_options = list(range(1, 32))
+    use_album_year = st.checkbox("Use Album Release Year", value=bool(release_year), disabled=not release_year)  # Checkbox to use album year
 
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    if use_album_year and release_year:
+        start_year = release_year
+        st.write(f"Using album release year: {release_year}")
+    else:
+        current_year = date.today().year
+        year_options = list(range(1900, current_year + 1))  # Extend year range
+        start_year = st.selectbox("Year", year_options, index=len(year_options) - 1, key="start_year")  # Default to current year
+    # Disable month and day selection when using album release year
+    start_month = None
+    start_day = None
+    end_year = None
+    end_month = None
+    end_day = None
 
-    with col1:
-        start_year = st.selectbox("Start Year", year_options, index=0, key="start_year") #index 0 shows the first year
-    with col2:
-        start_month = st.selectbox("Start Month", month_options, index=0, key="start_month")
-    with col3:
-        start_day = st.selectbox("Start Day", day_options, index=0, key="start_day")
-    with col4:
-        end_year = st.selectbox("End Year", year_options, index=len(year_options)-1, key="end_year") #index len(year_options)-1 shows the last year
-    with col5:
-        end_month = st.selectbox("End Month", month_options, index=len(month_options)-1, key="end_month")
-    with col6:
-        end_day = st.selectbox("End Day", day_options,  index=len(day_options)-1, key="end_day")
 
 # Search Button
-search_button_pressed = st.button("Search", key="search_button")
+search_button_pressed = st.button("Search Archive.org", key="search_button")
 
 if search_term or search_button_pressed:
     if not search_term:
@@ -239,7 +289,7 @@ if search_term or search_button_pressed:
                 if filtered_results:
                     st.success(f"Found {len(filtered_results)} results:")
                 else:
-                    st.warning("No results found matching the specified file types and date range.")
+                    st.warning("No results found matching the specified file types.")
                     st.session_state.results = None
             except Exception as e:
                 st.error(f"An error occurred: {e}")
