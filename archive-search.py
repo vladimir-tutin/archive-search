@@ -108,17 +108,14 @@ def display_result_details(result):
         st.image(image_url, caption=f"Image for {result['title']}", use_container_width=True)  # Changed here
     else:
         st.write("No image available.")
-
     # Retrieve files for the selected item
     with st.spinner(f"Retrieving files for '{result['title']}'..."):
         files = get_item_files(result['identifier'])
         if files:
             audio_files = [file for file in files if file['name'].lower().endswith(('.mp3', '.wav', '.flac', '.ogg'))]
-
             if audio_files:
                 st.subheader("Audio Player")
                 audio_urls = [f"https://archive.org/download/{result['identifier']}/{file['name']}" for file in audio_files]
-
                 # Create a playlist using the audio URLs
                 playlist_html = f"""
                     <audio controls autoplay>
@@ -127,7 +124,6 @@ def display_result_details(result):
                     </audio>
                 """
                 st.components.v1.html(playlist_html, height=100)  # Adjust height as needed
-
             st.subheader("Files:")
             file_names = [file['name'] for file in files]
             selected_file = st.selectbox("Select a file to download:", file_names,
@@ -171,7 +167,6 @@ def get_zip_download_url(identifier):
         print(f"Error getting ZIP download URL for {identifier}: {e}")
         return None
 
-
 # Streamlit UI
 st.title("Archive.org Search")
 
@@ -213,7 +208,6 @@ if search_term or search_button_pressed:
                 # Apply file type filtering
                 filtered_results = filter_results_by_file_types(results, file_types_filter)
                 st.session_state.results = filtered_results
-
                 if filtered_results:
                     st.success(f"Found {len(filtered_results)} results:")
                 else:
@@ -226,12 +220,41 @@ else:
     if 'results' not in st.session_state:
         st.session_state.results = None
 
+# Custom CSS for the popup
+st.markdown(
+    """
+    <style>
+    .popup {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+        z-index: 1000; /* Ensure it's on top of everything */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    .popup-content {
+        background-color: white;
+        padding: 20px;
+        border-radius: 5px;
+        width: 80%; /* Adjust as needed */
+        max-height: 80%;
+        overflow-y: auto; /* Enable scrolling if content is too long */
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+
 # Display results in a grid
 if st.session_state.results:
     num_columns = 5
     cols = st.columns(num_columns)
-    selected_result_identifier = st.session_state.get("selected_result_identifier",
-                                                       None)  # Store identifier instead of the whole result.
+    #selected_result_identifier = st.session_state.get("selected_result_identifier", None)  # Store identifier instead of the whole result.
 
     # Define a fixed height for the image containers
     image_height = 200  # Adjust this value as needed
@@ -245,7 +268,6 @@ if st.session_state.results:
                     response = requests.get(thumbnail_url)
                     response.raise_for_status()
                     image = Image.open(io.BytesIO(response.content))
-
                     zip_download_url = get_zip_download_url(result['identifier'])
                     # Create a download button URL
                     # Use HTML/CSS for overlapping button
@@ -275,17 +297,48 @@ if st.session_state.results:
             button_key = f"details_{i}"
             if st.button(f"Show Details", key=button_key):
                 st.session_state.selected_result_identifier = result['identifier']  # Store the identifier
-                st.session_state.expander_key = f"expander_{result['identifier']}"  # Store expander key
+            #else:
+             #   st.session_state.selected_result_identifier = None
+
 
     # Display the popup panel if a result is selected
-    if st.session_state.get("selected_result_identifier"):
+    if "selected_result_identifier" in st.session_state and st.session_state.selected_result_identifier:
         selected_result = next((result for result in st.session_state.results if
                                 result['identifier'] == st.session_state.selected_result_identifier), None)
 
         if selected_result:
-            expander_key = st.session_state.get("expander_key", "default_expander")
-            with st.expander("Result Details", expanded=True):
+            # Popup container
+            st.markdown(
+                f"""
+                <div class="popup">
+                    <div class="popup-content">
+                        <span style="position: absolute; top: 10px; right: 10px; cursor: pointer;" onclick="this.parentNode.parentNode.style.display='none';">&times;</span>
+                        </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            # Fill the popup content
+            with st.container():
+                st.markdown(
+                    f"""
+                    <style>
+                    [data-testid="stVerticalBlock"] {{
+                        padding: 1rem !important;
+                        border: 1px solid #ccc;
+                        border-radius: 5px;
+                        margin-bottom: 1rem;
+                    }}
+                    </style>
+                    """,
+                    unsafe_allow_html=True
+                )
                 display_result_details(selected_result)
+                # Add a close button to the popup content
+                if st.button("Close"):
+                    st.session_state.selected_result_identifier = None # Clear the selection
+
         else:
             st.error("Selected result not found.")
             st.session_state.selected_result_identifier = None  # Clear the selection
