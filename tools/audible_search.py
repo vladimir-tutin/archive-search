@@ -59,13 +59,13 @@ def scrape_audible(book_title=None, author_name=None):
         return []
 
 
-def audible_search_tool(retry_with_backoff):
+def audible_search_tool(retry_with_backoff, tool_id="album_search"):
     """Streamlit UI for Book Search (Audible)."""
     with st.expander("Book Search (Audible)", expanded=False):
-        book_title = st.text_input("Enter Book Title:", key="book_title_input", value="")
-        author_name = st.text_input("Enter Author Name:", key="author_name_input", value="")
+        book_title = st.text_input("Enter Book Title:", key=f"{tool_id}_book_title_input", value="")
+        author_name = st.text_input("Enter Author Name:", key=f"{tool_id}_author_name_input", value="")
 
-        if st.button("Search Book (Audible)", key="book_search_button"):
+        if st.button("Search Book (Audible)", key=f"{tool_id}_book_search_button"):
             with st.spinner(f"Searching Audible for '{book_title}' by '{author_name}'..."):
                 st.session_state.audible_results = scrape_audible(book_title, author_name)
 
@@ -77,7 +77,7 @@ def audible_search_tool(retry_with_backoff):
             book_options = [DEFAULT_SELECT_OPTION] + book_options  # add a blank option to the start
 
             selected_book_display = st.selectbox("Select a book:", book_options,
-                                                   key="audible_book_select")
+                                                   key=f"audible_book_select")
 
             if selected_book_display != DEFAULT_SELECT_OPTION:
                 st.session_state.selected_book = next(
