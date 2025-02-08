@@ -8,7 +8,7 @@ import requests
 import importlib
 from datetime import date
 from PIL import Image
-from concurrent.futures import ThreadPoolExecutor, as_completedd
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import streamlit as st
 import internetarchive
