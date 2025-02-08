@@ -341,7 +341,7 @@ def main():
     with st.sidebar:
         st.header("Tools")
         st.checkbox("Enable DuckDuckGo Search", key="use_ddg_search", value=st.session_state.use_ddg_search)
-        use_proxy_ddg = st.checkbox("Use Proxy with DuckDuckGo", value=False)
+        use_proxy_ddg = st.checkbox("Use Proxy with DuckDuckGo", value=True)
 
         for module in tool_modules:
             if hasattr(module, 'album_search_tool'):
