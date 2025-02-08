@@ -365,9 +365,9 @@ def display_results(results, media_type):
         identifier = result['identifier']
         with cols[i % num_columns]:
             if thumbnails.get(identifier):
-                st.image(thumbnails[identifier], use_container_width=True)
+                st.image(thumbnails[identifier])
             else:
-                st.image(DEFAULT_THUMBNAIL, use_container_width=True)
+                st.image(DEFAULT_THUMBNAIL)
             st.caption(f"{result['title']} (Source: {result['source']})")
             if st.button("Details", key=f"details_button_{identifier}"):
                 set_selected_result(identifier)
