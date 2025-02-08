@@ -273,7 +273,7 @@ def display_result_details(result, media_type):
         if thumbnail:
             st.image(thumbnail, caption=f"Image for {result['title']}", width=180)
         else:
-            st.image(DEFAULT_THUMBNAIL, use_container_width=True)
+            st.image(DEFAULT_THUMBNAIL)
 
         if result.get('creator'):
             st.write(f"**Creator:** {result['creator']}")
@@ -480,9 +480,9 @@ def main():
             identifier = result['identifier']
             with cols[i % num_columns]:
                 if thumbnails.get(identifier):
-                    st.image(thumbnails[identifier], use_container_width=True)
+                    st.image(thumbnails[identifier])
                 else:
-                    st.image(DEFAULT_THUMBNAIL, use_container_width=True)
+                    st.image(DEFAULT_THUMBNAIL)
                 st.caption(f"{result['title']} (Source: {result['source']})")
                 if st.button("Details", key=f"details_button_{identifier}"):
                     st.session_state.selected_result_identifier = identifier
