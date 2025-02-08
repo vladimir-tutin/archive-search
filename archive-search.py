@@ -79,7 +79,7 @@ def search_archive_with_duckduckgo(search_term, media_type, start_year=None, max
     ddg_results = []
     retries = 0
     delay = 1
-    proxy_address = "socks5h://customer-irawrz_z9zc0-sessid-0375393949-sesstime-10:Moomoocow11=@pr.oxylabs.io:7777"
+    proxy_address = st.secrets["PROXY_ADDRESS"]
     print(proxy_address)
     while retries <= max_retries:
         try:
